@@ -69,6 +69,17 @@ class Boundary(unittest.TestCase):
         self.assertEqual(r.headers['Content-Type'],'application/octet-stream')
         self.assertTrue(r.headers['Content-Disposition'].startswith('attachment'))
         self.assertIn('sandbox',r.headers['Content-Security-Policy'])
+    def test_fresh_empty_root(self):
+        empty = self.base/'empty'; empty.mkdir()
+        root = Root(str(empty))
+        try:
+            self.assertEqual(root.list('')['entries'], [])
+            self.assertEqual(root.index()['total'], 0)
+            self.assertTrue(all(v == 0 for v in root.index()['counts'].values()))
+        finally: os.close(root.fd)
+    def test_root_symlink_rejected(self):
+        link = self.base/'root-link'; link.symlink_to(self.base/'root', target_is_directory=True)
+        with self.assertRaises(OSError): Root(str(link))
     def test_mcp(self):
         data=json.dumps({'jsonrpc':'2.0','id':1,'method':'tools/call','params':{'name':'files_list','arguments':{'folder':'Folder'}}}).encode()
         r=json.load(self.request('/mcp',data=data))

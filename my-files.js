@@ -46,7 +46,7 @@
   // In-app steps go through the History API, not bare fragment navigation: a fragment navigation fires a
   // state-less popstate, which the standalone Back guard (WizardApp) reads as a Back press. Forward steps
   // push an entry; Back steps replace the current one, so the history never points back down into a folder.
-  // The routers (app.js, private-apps.js, this file) all listen for hashchange, so it is dispatched here.
+  // Both app routes use pushState and dispatch hashchange; the shared client owns root Back.
   // A Back step to the entry we came from pops it (history.back) instead of replacing.
   function go(hash, { replace = false } = {}) {
     const here = location.hash || '#/';
@@ -107,6 +107,7 @@
       view.available = true; renderUploadButton();
       view.folder = folder; view.entries = Array.isArray(data.entries) ? data.entries : [];
       renderList();
+      if (data.truncated) showError('This folder is large; showing the first 5,000 entries.');
     } catch (_) {
       if (generation === view.generation) showError('Couldn’t load this folder. Tap to retry.');
     } finally {
@@ -338,8 +339,13 @@
         if (!transient(r.status)) { fail(job, words(r.status, r.j)); return; }
         set('reconnecting', job.size); await wait();
       }
-      const check = await fetch(`${API}/content?path=${encodeURIComponent(receipt.path)}`, {method: 'HEAD', cache: 'no-store'});
-      if (!check.ok || Number(check.headers.get('Content-Length')) !== job.size) throw Object.assign(new Error('Uploaded, but readback is unavailable. Retry to verify.'), {user:true});
+      for (;;) {
+        try {
+          const check = await fetch(`${API}/content?path=${encodeURIComponent(receipt.path)}`, {method: 'HEAD', cache: 'no-store'});
+          if (!check.ok || Number(check.headers.get('Content-Length')) !== job.size) throw new Error('Readback unavailable');
+          break;
+        } catch (_) { set('reconnecting', job.size); await wait(); }
+      }
       job.result = receipt; job.file = null;
       set('done', job.size); persist();
       toast(`Uploaded to ${receipt.folder ? receipt.folder.split('/').join(' › ') : 'My files'}`);
