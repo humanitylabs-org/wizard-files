@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en" data-app="wizard-files">
+<head>
+<script>if (window !== window.top) document.documentElement.dataset.inFrame = "true";</script>
+  <script src="/wizard-os-home/core/app-client.js"></script>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#faf9f7">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <title>Wizard Files</title>
+  <link rel="stylesheet" href="styles.css?v=20260929-apps-thumbnails">
+  <link rel="stylesheet" href="my-files.css?v=20261015-upload">
+<script>
+</script>
+
+  <style>
+  :root[data-wz-hosted] {--paper:var(--wz-canvas); --surface:var(--wz-surface); --soft:var(--wz-surface-raised); --ink:var(--wz-text); --muted:var(--wz-text-secondary); --line:var(--wz-border);}
+  html[data-wz-hosted],html[data-wz-hosted] body {background:var(--wz-canvas);}
+  </style>
+  <link rel="stylesheet" href="restyle.css?v=d4492ab901ea">
+<link rel="stylesheet" href="integration.css">
+</head>
+<body>
+  <main class="app-shell">
+    <header class="topbar">
+      <a class="back-button" id="back-button" href="#/" aria-label="Back">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+      </a>
+      <h1 id="page-title">Wizard Files</h1>
+      <span class="topbar-spacer" aria-hidden="true"></span>
+    </header>
+
+    <div class="sticky-tools">
+      <label class="search-box" for="search-input">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input id="search-input" type="search" autocomplete="off" autocapitalize="none" placeholder="Search owner files">
+        <button id="clear-search" type="button" aria-label="Clear search">×</button>
+      </label>
+
+    </div>
+
+    <section id="home-types" aria-label="File types">
+      <div class="type-grid" id="type-tiles">
+        <a class="type-tile my-files-tile" href="#/my" data-type="my">
+          <span class="type-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span>
+          <span><strong>My files</strong><small>Folders &amp; uploads</small></span>
+          <span class="apps-entry-arrow" aria-hidden="true">›</span>
+        </a>
+        <a class="type-tile video" href="#/videos" data-type="video">
+          <span class="type-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="m10 9 5 3-5 3z"/></svg></span>
+          <span><strong>Videos</strong><small id="count-video">—</small></span>
+        </a>
+        <a class="type-tile photo" href="#/photos" data-type="photo">
+          <span class="type-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="9" r="2"/><path d="m4 17 5-5 4 4 2-2 5 5"/></svg></span>
+          <span><strong>Photos</strong><small id="count-photo">—</small></span>
+        </a>
+        <a class="type-tile document" href="#/documents" data-type="document">
+          <span class="type-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></svg></span>
+          <span><strong>Documents</strong><small id="count-document">—</small></span>
+        </a>
+        <a class="type-tile link" href="#/links" data-type="link">
+          <span class="type-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.5.5l2-2a5 5 0 0 0-7-7l-1.1 1.1"/><path d="M14 11a5 5 0 0 0-7.5-.5l-2 2a5 5 0 0 0 7 7l1.1-1.1"/></svg></span>
+          <span><strong>Links</strong><small id="count-link">—</small></span>
+        </a>
+
+      </div>
+    </section>
+
+
+
+    <section id="my-files" class="my-files" aria-label="My files" hidden>
+      <nav id="my-crumbs" class="my-crumbs" aria-label="Folder path"></nav>
+      <div class="my-toolbar">
+        <button id="my-upload" class="my-upload-button" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M5 20h14"/></svg><span>Upload</span></button>
+        <p id="my-upload-hint" class="my-hint" hidden></p>
+      </div>
+      <input id="my-picker" type="file" multiple hidden>
+      <input id="my-repick" type="file" hidden>
+      <div id="my-uploads" class="my-uploads" aria-label="Uploads" hidden></div>
+      <p id="my-error" class="status-banner" role="alert" hidden></p>
+      <div id="my-list" class="feed my-list" aria-live="polite" aria-busy="true"></div>
+      <div id="my-empty" class="empty-state" hidden><h3>This folder is empty</h3><p>Use Upload to add files here.</p></div>
+    </section>
+
+
+
+    <section class="feed-section" aria-live="polite" aria-busy="true">
+      <div class="section-label-row feed-toolbar"><h2 id="feed-label">Recent</h2><span id="result-count"></span><div id="view-toggle" role="group" aria-label="View layout"><button type="button" data-view="list" aria-pressed="false">☰ <span>List</span></button><button type="button" data-view="grid" aria-pressed="false">▦ <span>Grid</span></button></div></div>
+      <div id="status-banner" class="status-banner" hidden></div>
+      <div id="feed" class="feed"></div>
+      <div id="load-sentinel" class="load-sentinel" aria-hidden="true"></div>
+      <div id="empty-state" class="empty-state" hidden>
+        <div class="empty-icon" aria-hidden="true">⌕</div>
+        <h3 id="empty-title">Nothing here yet</h3>
+        <p id="empty-copy"></p>
+        <button type="button" id="search-all" hidden>Search all types</button>
+      </div>
+    </section>
+  </main>
+
+  <div id="my-sheet" class="sheet-layer" hidden>
+    <button class="sheet-scrim" type="button" aria-label="Close preview"></button>
+    <article class="sheet" role="dialog" aria-modal="true" aria-labelledby="my-sheet-title">
+      <div class="sheet-handle" aria-hidden="true"></div>
+      <button class="sheet-close" type="button" aria-label="Close">×</button>
+      <div id="my-sheet-preview" class="sheet-preview"></div>
+      <div class="sheet-body">
+        <h2 id="my-sheet-title"></h2>
+        <p id="my-sheet-meta" class="sheet-context"></p>
+        <div id="my-sheet-actions" class="sheet-actions"></div>
+      </div>
+    </article>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  
+  <script src="app.js?v=20260929-apps-thumbnails" defer></script>
+  <script src="my-files.js?v=20261015-upload2" defer></script>
+</body>
+</html>
