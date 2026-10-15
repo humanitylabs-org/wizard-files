@@ -23,8 +23,9 @@ mcp:
   path: /mcp
   port: 8080
 skill: SKILL.md
-needs: [files]
+provides: [files]
+needs: []
 ---
-Wizard Files reads only the mounted owner-files root. Uploads use the box's existing
-`/wizard/v1/uploads` service, configured to place files into the same root.
-The candidate intentionally does not claim the files slot before independent review.
+Wizard Files is the owner-files provider. It reads only the mounted Wizard files
+root; uploads use the box's existing `/wizard/v1/uploads` service configured for
+the same root. Legacy catalogs and private-agent storage remain separate.
