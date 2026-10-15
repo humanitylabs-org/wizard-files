@@ -1,0 +1,18 @@
+services:
+  wizard-files:
+    image: ghcr.io/humanitylabs-org/wizard-files:0.1.0
+    environment:
+      FILES_ROOT: /files
+      FILES_ALLOWED_HOSTS: ${FILES_ALLOWED_HOSTS}
+    volumes:
+      - ${ROOT_FOLDER_HOST}/media:/files:ro
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ['no-new-privileges:true']
+    tmpfs: ['/tmp:size=16m,noexec,nosuid,nodev']
+    x-runtipi:
+      is_main: true
+      internal_port: 8080
+x-runtipi:
+  schema_version: 2
+  overrides: []
