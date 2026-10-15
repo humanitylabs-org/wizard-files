@@ -1,6 +1,6 @@
 services:
   wizard-files:
-    image: ghcr.io/humanitylabs-org/wizard-files:0.1.1
+    image: ghcr.io/humanitylabs-org/wizard-files:0.1.2
     environment:
       FILES_ROOT: /files
       FILES_ALLOWED_HOSTS: ${FILES_ALLOWED_HOSTS}

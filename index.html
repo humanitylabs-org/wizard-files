@@ -92,6 +92,8 @@
 
     <section class="feed-section" aria-live="polite" aria-busy="true">
       <div class="section-label-row feed-toolbar"><h2 id="feed-label">Recent</h2><span id="result-count"></span><div id="view-toggle" role="group" aria-label="View layout"><button type="button" data-view="list" aria-pressed="false">☰ <span>List</span></button><button type="button" data-view="grid" aria-pressed="false">▦ <span>Grid</span></button></div></div>
+      <div id="photo-senders" class="apps-layout photo-senders" role="group" aria-label="Photo sender" hidden></div>
+      <p id="photo-provenance-note" class="my-hint" hidden></p>
       <div id="status-banner" class="status-banner" hidden></div>
       <div id="feed" class="feed"></div>
       <div id="load-sentinel" class="load-sentinel" aria-hidden="true"></div>
@@ -120,6 +122,7 @@
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   
+  <script src="media-gallery.js" defer></script>
   <script src="app.js?v=20260929-apps-thumbnails" defer></script>
   <script src="my-files.js?v=20261015-upload2" defer></script>
 </body>

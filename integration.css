@@ -9,3 +9,22 @@ html[data-wz-hosted] .topbar h1 {visibility:hidden;}
 .owner-item .item-meta {overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 :root[data-color-scheme="light"] {color-scheme:light;}
 .scope-toggle {margin-bottom:12px;}
+/* Large film cards preserve decoded frame aspect ratio; no crop or fake artwork. */
+.feed .video-card {display:flex;flex-direction:column;align-items:stretch;gap:12px;min-width:0;padding:12px;}
+.feed .video-card .video-thumbnail {position:relative;display:flex;align-items:center;justify-content:center;width:100%;height:auto;min-height:160px;aspect-ratio:16/9;max-height:none;border-radius:10px;overflow:hidden;background:var(--soft);color:var(--muted);font-size:13px;}
+.feed .video-card .video-thumbnail img {display:block;width:100%;height:100%;object-fit:contain;border-radius:0;}
+.video-play {position:absolute;left:12px;bottom:12px;display:grid;place-items:center;width:40px;height:40px;border-radius:50%;background:var(--surface);color:var(--ink);border:1px solid var(--line);}
+.feed .video-card .item-title {white-space:normal;overflow-wrap:anywhere;}
+.feed .video-card .my-chevron {display:none;}
+.video-gallery {display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:12px;}
+.photo-senders {display:flex;justify-content:flex-start;gap:6px;flex-wrap:wrap;margin:0 0 12px;}
+.photo-senders button {min-height:44px;flex:1 0 auto;}
+.feed.owner-grid .owner-item .my-icon:not(.video-thumbnail) {width:100%;height:130px;}
+.feed.owner-grid .owner-item .my-icon img {width:100%;height:100%;object-fit:contain;}
+.feed.owner-grid .owner-item .item-copy {display:block;width:100%;min-width:0;text-align:left;}
+.feed .owner-item .item-title,.feed .owner-item .item-meta {display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;}
+.feed.owner-grid .owner-item {padding:10px;border-radius:10px;}
+.feed .video-card .item-copy {text-align:left;}
+.sheet-actions button {font:inherit;border:1px solid var(--line);border-radius:10px;padding:11px 14px;background:var(--soft);color:var(--ink);cursor:pointer;}
+#my-sheet-preview video {width:100%;max-height:65dvh;object-fit:contain;}
+@media(max-width:560px){.feed.owner-grid:has(.video-card){grid-template-columns:1fr;}.feed .video-card .video-thumbnail{min-height:180px;}}
