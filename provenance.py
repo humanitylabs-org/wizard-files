@@ -69,7 +69,7 @@ class PhotoProvenance:
 
     def _enrich(self, rows):
         photos = {r['path']: r for r in rows if r['type'] == 'photo'}
-        metadata = {'available': False, 'owner_label': 'you', 'agent_labels': {}, 'partial': False}
+        metadata = {'available': False, 'owner_label': 'you', 'agent_labels': {}, 'partial': False, 'pending': 0}
         for row in photos.values():
             row.update(sources=[], senders=['unknown'])
         try:
@@ -108,8 +108,12 @@ class PhotoProvenance:
                     key = (path, s.st_dev, s.st_ino, s.st_size, s.st_mtime_ns, s.st_ctime_ns)
                     digest = self.hashes.get(key)
                     if digest is None:
-                        if s.st_size > MAX_PHOTO or s.st_size > budget:
+                        if s.st_size > MAX_PHOTO:
+                            continue  # permanently outside bounds, not retryable
+                        if s.st_size > budget:
                             metadata['partial'] = True
+                            photos[path]['senders'] = []
+                            photos[path]['verification_pending'] = True
                             continue
                         budget -= s.st_size
                         h = hashlib.sha256()
@@ -132,7 +136,10 @@ class PhotoProvenance:
             except (OSError, ValueError):
                 continue
             row = photos[path]
+            row.pop('verification_pending', None)
             row['sources'].extend(v for v in safe if v not in row['sources'])
             row['senders'] = sorted({'owner' if v['role'] == 'user' else 'agent:' + v['agent_id'] for v in row['sources']})
             row['sent_at'] = max(v['sent_at'] for v in row['sources'])
+        metadata['pending'] = sum(bool(r.get('verification_pending')) for r in photos.values())
+        metadata['partial'] = metadata['pending'] > 0
         return metadata

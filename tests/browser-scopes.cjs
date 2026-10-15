@@ -38,7 +38,7 @@ const out=process.env.QA_OUT || '.';
     await page.locator('[data-scope="app"]').click();await page.locator('.feed-section[aria-busy="false"]').waitFor();
     ok((await page.locator('#feed').innerText()).includes('chapter.md'),'app Recent present');
     ok(!(await page.locator('#feed').innerText()).includes('session.wav'),'recording absent from app scope');
-    await page.locator('#search-input').fill('chapter');await page.waitForFunction(()=>document.querySelector('#result-count').textContent==='1');
+    await page.locator('#search-input').fill('chapter');await page.waitForFunction(()=>document.querySelector('#result-count').textContent==='1 of 1');
     await page.locator('#feed a').click();await page.locator('#my-sheet:not([hidden])').waitFor();
     const chapter=await context.request.get(new URL(await page.locator('#my-sheet-actions .primary').getAttribute('href'),base).href);
     ok(chapter.ok()&&(await chapter.text()).includes('chapter'),'chapter opens through unchanged content boundary');
