@@ -143,7 +143,10 @@
       const icon = node('span', 'my-icon');
       if (entry.is_dir) icon.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>';
       else if (kind(entry.name) === 'image' && entry.size < 8 * MIB) { const img = node('img'); img.loading = 'lazy'; img.alt = ''; img.src = contentUrl(path); img.onerror = () => { img.remove(); icon.textContent = ext(entry.name).slice(0, 4) || 'FILE'; }; icon.append(img); }
-      else icon.textContent = (ext(entry.name) || 'file').slice(0, 4);
+      else if(kind(entry.name)==='video'){
+        row.classList.add('video-card'); WizMediaGallery.thumbnail(icon,{...entry,path});
+        row.addEventListener('click',e=>{if(e.button!==0||e.metaKey||e.ctrlKey||e.shiftKey||e.altKey)return;e.preventDefault();openVideo({...entry,path},row);});
+      }else icon.textContent = (ext(entry.name) || 'file').slice(0, 4);
       const copy = node('span', 'item-copy');
       copy.append(node('span', 'item-title', entry.name), node('span', 'item-meta', entry.is_dir ? 'Folder' : [size(entry.size), when(entry.mtime)].filter(Boolean).join(' · ')));
       row.append(icon, copy, node('span', 'my-chevron', entry.is_dir ? '›' : ''));
@@ -152,14 +155,27 @@
   }
 
   // ---- preview sheet --------------------------------------------------------------------------------
-  let overlay = null;
-  function openSheet(folder, name) {
+  let overlay = null, directVideo = false, returnFocus = null;
+  function stopMedia() {
+    for (const media of els.sheetPreview.querySelectorAll('video,audio')) { media.pause(); media.removeAttribute('src'); media.load(); }
+  }
+  function openVideo(item, trigger) {
+    directVideo = true; returnFocus = trigger;
+    const parts = item.path.split('/'); const name = parts.pop();
+    openSheet(parts.join('/'), name, true);
+  }
+  function openSheet(folder, name, play = false) {
+    stopMedia();
     const path = folder ? `${folder}/${name}` : name;
     const entry = view.entries.find(e => e.name === name && !e.is_dir);
     els.sheetPreview.replaceChildren();
     const k = kind(name);
     if (k === 'image') { const img = node('img'); img.src = contentUrl(path); img.alt = name; els.sheetPreview.append(img); }
-    else if (k === 'video') { const v = node('video'); v.src = contentUrl(path); v.controls = true; v.preload = 'metadata'; v.playsInline = true; els.sheetPreview.append(v); }
+    else if (k === 'video') {
+      WizMediaGallery.suspend(true);
+      const v = node('video'); v.src = contentUrl(path); v.controls = true; v.preload = 'metadata'; v.playsInline = true; v.muted = true; els.sheetPreview.append(v);
+      if (play) v.play().catch(() => { /* native controls remain available */ });
+    }
     else if (k === 'audio') { const a = node('audio'); a.src = contentUrl(path); a.controls = true; a.preload = 'metadata'; els.sheetPreview.append(a); }
     else els.sheetPreview.append(node('div', 'doc-preview', (ext(name) || 'file').slice(0, 4)));
     els.sheetTitle.textContent = name;
@@ -167,16 +183,23 @@
     const open = node('a', 'primary', 'Open'); open.href = contentUrl(path); open.target = '_blank'; open.rel = 'noopener noreferrer';
     const download = node('a', '', 'Download'); download.href = contentUrl(path, true);
     els.sheetActions.replaceChildren(open, download);
+    if(k==='video'){
+      const full=node('button','primary','Fullscreen');full.type='button';
+      full.onclick=()=>{const v=els.sheetPreview.querySelector('video');if(v.requestFullscreen)v.requestFullscreen().catch(()=>toast('Fullscreen unavailable'));else if(v.webkitEnterFullscreen)v.webkitEnterFullscreen();else toast('Fullscreen unavailable');};
+      els.sheetActions.prepend(full);
+    }
     els.sheet.hidden = false; document.body.style.overflow = 'hidden';
     if (!overlay && window.WizardApp?.back?.push) overlay = window.WizardApp.back.push(() => { closeSheet(); return true; });
     setTimeout(() => els.sheetClose.focus(), 0);
   }
   function hideSheet() {
     els.sheet.hidden = true; document.body.style.overflow = '';
-    for (const media of els.sheetPreview.querySelectorAll('video,audio')) { media.pause(); media.removeAttribute('src'); media.load(); }
+    stopMedia(); els.sheetPreview.replaceChildren();
+    WizMediaGallery.suspend(false);
+    directVideo=false;returnFocus?.focus({preventScroll:true});returnFocus=null;
     if (overlay) { const o = overlay; overlay = null; try { o.release(); } catch (_) {} }
   }
-  function closeSheet() { const r = route(); if (r && r.file) go(hashFor(r.folder), { replace: true }); else hideSheet(); }
+  function closeSheet() { if(directVideo){hideSheet();return;} const r = route(); if (r && r.file) go(hashFor(r.folder), { replace: true }); else hideSheet(); }
   els.sheetClose.addEventListener('click', closeSheet);
   els.sheetScrim.addEventListener('click', closeSheet);
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && !els.sheet.hidden) closeSheet(); });
@@ -480,7 +503,7 @@
     e.preventDefault();
     go(link.getAttribute('href'));
   });
-  window.WizMyFiles = Object.freeze({ backTarget, route, go });
+  window.WizMyFiles = Object.freeze({ backTarget, route, go, openVideo });
   restore();
   apply();
 })();

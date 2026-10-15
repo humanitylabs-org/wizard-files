@@ -19,6 +19,34 @@ The installer must configure that system service's owner-files root to the same 
 root. Shared-origin apps retain the host shell's authority boundary; this package does
 not claim to isolate a malicious same-origin app from the system API.
 
+## Media gallery and photo sender contract
+
+Video cards lazily decode one near-start frame at a time in the browser (12-second
+ceiling, metadata preload and byte-range seek), never bulk-process media on the server.
+Frames keep their source aspect ratio and are cached only on the device (96 entries,
+640px maximum dimension) keyed by path plus server file identity. Tapping thumbnail
+or title immediately opens one muted player with native controls, fullscreen and
+close/Back to the unchanged gallery. Unsupported codecs show a terminal fallback,
+not an endless loading state. No thumbnail artifacts enter the owner's library.
+
+The trusted photo producer may atomically replace `media/.wizard/photo-provenance.json`:
+`{schema:1, owner_label:"Owner", agent_labels:{main:"Guide"}, files:[{path:"Photos/Chats/example.png", sha256:"<lowercase 64 hex>", sources:[{role:"user", agent_id:"main", sender_label:"Owner", thread_id:"thread", message_id:"message", sent_at:"2026-01-01T00:00:00Z"}]}]}`.
+Multiple user/assistant sources are retained. Files reads that **one fixed hidden
+path**, no-follow on every component, and verifies the SHA256 against the confined
+regular photo bytes before trusting attribution. It never reads a history database,
+attachment vault or another mount. Hidden metadata remains inaccessible to all public
+file APIs. Missing/invalid metadata, missing files, symlinks and checksum mismatches
+leave existing photos Other / unknown; nothing is inferred from names.
+
+Reader limits: 8 MiB JSON, 10,000 entries, 128 agent labels, 512 sources per entry,
+32 MiB per image and 128 MiB cold hashing per index request. Verified hashes cache
+in process against device/inode/size/mtime/ctime; limits produce an explicit partial
+attribution notice rather than false sender claims. The trusted producer owns privacy
+eligibility and publication; Files only consumes already-projected owner-root bytes.
+`api/index?type=photo&sender=owner|agent:<id>|unknown` combines with scope and search;
+counts are before the sender filter, and latest verified sent time replaces import
+mtime for sorting. UI labels come from the manifest, never owner-specific code.
+
 ## Install
 
 Install the private source through WAM. Configure FILES_ALLOWED_HOSTS to the hostnames
@@ -50,7 +78,7 @@ transfer service's authorization is unchanged. Root uploads use the existing Inb
 behavior; if any Inbox prefix is classified, choose a different personal folder.
 
 Build on the designated worker: `docker build --platform linux/amd64 --build-arg
-REVISION=$(git rev-parse HEAD) -t wizard-files:0.1.1 .`. Run `python -m unittest discover
+REVISION=$(git rev-parse HEAD) -t wizard-files:0.1.2 .`. Run `python -m unittest discover
 -s tests -v`. Runtime has no third-party dependencies. The shell supplies the real
 `/wizard-os-home/core/app-client.js` (not bundled or reimplemented here).
 

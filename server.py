@@ -8,11 +8,12 @@ import os
 from pathlib import Path
 import re
 import stat
+from provenance import PhotoProvenance
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit, quote
 
-VERSION = '0.1.1'
-ASSETS = {'index.html', 'app.js', 'my-files.js', 'styles.css', 'my-files.css', 'restyle.css', 'integration.css', 'icon.png'}
+VERSION = '0.1.2'
+ASSETS = {'index.html', 'media-gallery.js', 'app.js', 'my-files.js', 'styles.css', 'my-files.css', 'restyle.css', 'integration.css', 'icon.png'}
 
 class Root:
     def __init__(self, path, app_data_prefixes=()):
@@ -26,6 +27,7 @@ class Root:
         if os.path.abspath(path) == '/':
             raise ValueError('root must be narrower than filesystem')
         self.fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        self.provenance = PhotoProvenance(self)
 
     @staticmethod
     def parts(path):
@@ -96,7 +98,8 @@ class Root:
                 rows.append({'name': name, 'path': '/'.join(filter(None, [path, name])), 'is_dir': stat.S_ISDIR(s.st_mode),
                              'size': s.st_size if stat.S_ISREG(s.st_mode) else 0,
                              'mtime': datetime.datetime.fromtimestamp(s.st_mtime, datetime.timezone.utc).isoformat(),
-                             'type': kind(name)})
+                             'type': kind(name),
+                             'identity': f'{s.st_dev}:{s.st_ino}:{s.st_size}:{s.st_mtime_ns}:{s.st_ctime_ns}'})
                 if len(rows) >= 5000:
                     result.update(entries=rows, truncated=True)
                     return result
@@ -104,7 +107,9 @@ class Root:
         result['entries'] = rows
         return result
 
-    def index(self, query='', category='', scope='personal'):
+    def index(self, query='', category='', scope='personal', sender=''):
+        if not isinstance(sender, str) or len(sender) > 134 or (sender not in {'', 'owner', 'unknown'} and not sender.startswith('agent:')):
+            raise ValueError('invalid sender')
         self.scope(scope)
         # Bounded on-demand walk, never a host index or private database.
         pending, rows, seen, truncated = [''], [], 0, False
@@ -128,9 +133,12 @@ class Root:
                 else:
                     rows.append(entry)
         counts = {k: sum(r['type'] == k for r in rows) for k in ['video', 'photo', 'document', 'link', 'audio']}
-        selected = [r for r in rows if (not category or r['type'] == category) and query.casefold() in r['path'].casefold()]
-        selected.sort(key=lambda r: r['mtime'], reverse=True)
-        return {'scope': scope, 'items': selected[:300], 'counts': counts, 'total': len(selected), 'truncated': truncated or bool(pending) or len(selected) > 300}
+        provenance = self.provenance.enrich(rows)
+        matching = [r for r in rows if (not category or r['type'] == category) and query.casefold() in r['path'].casefold()]
+        sender_counts = {key: sum(key in r.get('senders', []) for r in matching) for key in ['owner', *['agent:' + a for a in provenance['agent_labels']], 'unknown']}
+        selected = [r for r in matching if not sender or sender in r.get('senders', [])]
+        selected.sort(key=lambda r: r.get('sent_at', r['mtime']), reverse=True)
+        return {'scope': scope, 'items': selected[:300], 'counts': counts, 'provenance': provenance, 'sender_counts': sender_counts, 'total': len(selected), 'truncated': truncated or bool(pending) or len(selected) > 300}
 
 
 def kind(name):
@@ -190,8 +198,8 @@ class Handler(BaseHTTPRequestHandler):
                 if set(q) - {'folder', 'scope'}: return self.error(400, 'unknown_parameter')
                 return self.json(200, self.server.root.list(q.get('folder', ''), q.get('scope', 'personal')))
             if parsed.path == '/api/index':
-                if set(q) - {'q', 'type', 'scope'}: return self.error(400, 'unknown_parameter')
-                return self.json(200, self.server.root.index(q.get('q', ''), q.get('type', ''), q.get('scope', 'personal')))
+                if set(q) - {'q', 'type', 'scope', 'sender'}: return self.error(400, 'unknown_parameter')
+                return self.json(200, self.server.root.index(q.get('q', ''), q.get('type', ''), q.get('scope', 'personal'), q.get('sender', '')))
             if parsed.path == '/api/files/content':
                 if set(q) - {'path', 'download'}: return self.error(400, 'unknown_parameter')
                 with self.server.root.open(q.get('path', '')) as fd:
