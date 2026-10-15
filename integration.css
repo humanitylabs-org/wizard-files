@@ -17,8 +17,14 @@ html[data-wz-hosted] .topbar h1 {visibility:hidden;}
 .feed .video-card .item-title {white-space:normal;overflow-wrap:anywhere;}
 .feed .video-card .my-chevron {display:none;}
 .video-gallery {display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:12px;}
-.photo-senders {display:flex;gap:6px;flex-wrap:wrap;margin:0 0 12px;}
-.photo-senders button {min-height:40px;}
+.photo-senders {display:flex;justify-content:flex-start;gap:6px;flex-wrap:wrap;margin:0 0 12px;}
+.photo-senders button {min-height:44px;flex:1 0 auto;}
+.feed.owner-grid .owner-item .my-icon:not(.video-thumbnail) {width:100%;height:130px;}
+.feed.owner-grid .owner-item .my-icon img {width:100%;height:100%;object-fit:contain;}
+.feed.owner-grid .owner-item .item-copy {display:block;width:100%;min-width:0;text-align:left;}
+.feed .owner-item .item-title,.feed .owner-item .item-meta {display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;}
+.feed.owner-grid .owner-item {padding:10px;border-radius:10px;}
+.feed .video-card .item-copy {text-align:left;}
 .sheet-actions button {font:inherit;border:1px solid var(--line);border-radius:10px;padding:11px 14px;background:var(--soft);color:var(--ink);cursor:pointer;}
 #my-sheet-preview video {width:100%;max-height:65dvh;object-fit:contain;}
 @media(max-width:560px){.feed.owner-grid:has(.video-card){grid-template-columns:1fr;}.feed .video-card .video-thumbnail{min-height:180px;}}
