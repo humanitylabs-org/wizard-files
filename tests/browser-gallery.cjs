@@ -20,7 +20,12 @@ const out=process.env.QA_OUT || '.', live=process.env.LIVE==='1';
    let f=page;
    if(live){
     await page.waitForFunction(()=>[...document.querySelectorAll('iframe')].some(f=>new URL(f.src||'about:blank',location.href).pathname==='/wizard-files/'));
-    f=page.frames().find(f=>new URL(f.url()||'about:blank').pathname==='/wizard-files/');assert(f);
+    for(let attempt=0;attempt<100;attempt++){
+      f=page.frames().find(frame=>new URL(frame.url()||'about:blank').pathname==='/wizard-files/');
+      if(f)break;
+      await page.waitForTimeout(100);
+    }
+    assert(f,'canonical app iframe navigation completed');
    }
    await f.locator('.feed-section[aria-busy="false"]').waitFor();
    ok(await f.locator('[data-scope="personal"]').getAttribute('aria-pressed')==='true','cold personal '+phone);
@@ -72,6 +77,15 @@ const out=process.env.QA_OUT || '.', live=process.env.LIVE==='1';
    await f.locator('#feed .video-card').first().scrollIntoViewIfNeeded();
    await f.locator('#feed [data-thumbnail="cached"]').first().waitFor();
    ok(true,'bounded frame cache reused '+phone);
+   await f.locator('#feed .video-card').first().locator('.video-thumbnail').click();
+   await f.waitForFunction(()=>{const v=document.querySelector('#my-sheet video');return v&&!v.paused&&v.currentTime>.2;});
+   ok(true,'thumbnail tap directly plays '+phone);
+   await page.screenshot({path:out+`/${live?'live':'fixture'}-${phone?'phone':'desktop'}-player.png`,fullPage:true});
+   if(live){
+     const result=await page.evaluate(()=>WizAppServices.back([...document.querySelectorAll('iframe')].find(f=>new URL(f.src||'about:blank',location.href).pathname==='/wizard-files/')));
+     ok(result==='handled','Back after thumbnail play handled '+phone);
+   }else await f.locator('#my-sheet .sheet-close').click();
+   await f.locator('#my-sheet').waitFor({state:'hidden'});
    await page.screenshot({path:out+`/${live?'live':'fixture'}-${phone?'phone':'desktop'}-gallery.png`,fullPage:true});
    if(!live&&phone){
     await f.locator('[data-scope="app"]').click();await f.locator('.feed-section[aria-busy="false"]').waitFor();
