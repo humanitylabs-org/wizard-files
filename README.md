@@ -45,7 +45,16 @@ attribution notice rather than false sender claims. The trusted producer owns pr
 eligibility and publication; Files only consumes already-projected owner-root bytes.
 `api/index?type=photo&sender=owner|agent:<id>|unknown` combines with scope and search;
 counts are before the sender filter, and latest verified sent time replaces import
-mtime for sorting. UI labels come from the manifest, never owner-specific code.
+mtime for sorting (path breaks ties). UI labels come from the manifest, never owner-specific code.
+
+Index pages default to 120 items (`limit` 1–300, `offset` 0–10000); `has_more` and
+`next_offset` describe the next page. Pass the returned `snapshot` with subsequent
+pages: changed rows/order return `reset:true` and page zero, preventing gaps.
+`truncated` describes only the bounded filesystem scan, not pagination. The view
+loads more on demand, deduplicates paths and cancels old scope/filter/search requests.
+Cold verification marks deferred photos pending, not Unknown; the view retries up
+to eight bounded requests, then offers an explicit retry. Permanent size-limit or
+checksum failures stay Unknown. Pagination is held until sender ordering stabilizes.
 
 ## Install
 
@@ -78,7 +87,7 @@ transfer service's authorization is unchanged. Root uploads use the existing Inb
 behavior; if any Inbox prefix is classified, choose a different personal folder.
 
 Build on the designated worker: `docker build --platform linux/amd64 --build-arg
-REVISION=$(git rev-parse HEAD) -t wizard-files:0.1.2 .`. Run `python -m unittest discover
+REVISION=$(git rev-parse HEAD) -t wizard-files:0.1.3 .`. Run `python -m unittest discover
 -s tests -v`. Runtime has no third-party dependencies. The shell supplies the real
 `/wizard-os-home/core/app-client.js` (not bundled or reimplemented here).
 

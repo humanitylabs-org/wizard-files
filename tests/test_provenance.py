@@ -107,7 +107,7 @@ class Provenance(unittest.TestCase):
         with patch('provenance.HASH_BUDGET', 1):
             data = self.root.index()
             self.assertTrue(data['provenance']['partial'])
-            self.assertEqual(data['sender_counts']['unknown'], 4)
+            self.assertEqual(data['sender_counts']['unknown'], 1)
         self.root.index()
         with patch('provenance.HASH_BUDGET', 1):
             self.assertFalse(self.root.index()['provenance']['partial'])

@@ -2,6 +2,7 @@
 import contextlib
 import datetime
 import errno
+import hashlib
 import json
 import mimetypes
 import os
@@ -12,7 +13,7 @@ from provenance import PhotoProvenance
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit, quote
 
-VERSION = '0.1.2'
+VERSION = '0.1.3'
 ASSETS = {'index.html', 'media-gallery.js', 'app.js', 'my-files.js', 'styles.css', 'my-files.css', 'restyle.css', 'integration.css', 'icon.png'}
 
 class Root:
@@ -107,7 +108,14 @@ class Root:
         result['entries'] = rows
         return result
 
-    def index(self, query='', category='', scope='personal', sender=''):
+    def index(self, query='', category='', scope='personal', sender='', offset=0, limit=120, snapshot=''):
+        def page_number(value, low, high):
+            if type(value) not in (int, str) or not re.fullmatch(r'0|[1-9][0-9]{0,4}', str(value)) or not low <= int(value) <= high:
+                raise ValueError('invalid pagination')
+            return int(value)
+        offset, limit = page_number(offset, 0, 10000), page_number(limit, 1, 300)
+        if not isinstance(snapshot, str) or (snapshot and not re.fullmatch('[a-f0-9]{64}', snapshot)):
+            raise ValueError('invalid snapshot')
         if not isinstance(sender, str) or len(sender) > 134 or (sender not in {'', 'owner', 'unknown'} and not sender.startswith('agent:')):
             raise ValueError('invalid sender')
         self.scope(scope)
@@ -137,8 +145,18 @@ class Root:
         matching = [r for r in rows if (not category or r['type'] == category) and query.casefold() in r['path'].casefold()]
         sender_counts = {key: sum(key in r.get('senders', []) for r in matching) for key in ['owner', *['agent:' + a for a in provenance['agent_labels']], 'unknown']}
         selected = [r for r in matching if not sender or sender in r.get('senders', [])]
-        selected.sort(key=lambda r: r.get('sent_at', r['mtime']), reverse=True)
-        return {'scope': scope, 'items': selected[:300], 'counts': counts, 'provenance': provenance, 'sender_counts': sender_counts, 'total': len(selected), 'truncated': truncated or bool(pending) or len(selected) > 300}
+        selected.sort(key=lambda r: (r.get('sent_at', r['mtime']), r['path']), reverse=True)
+        # Bind pages to verified ordering; changed libraries restart without gaps.
+        signature = [scope, query, category, sender, [(r['path'], r['identity'], r.get('sent_at'), r.get('senders')) for r in selected]]
+        current = hashlib.sha256(json.dumps(signature, separators=(',', ':')).encode()).hexdigest()
+        reset = bool(snapshot and snapshot != current)
+        if reset:
+            offset = 0
+        items = selected[offset:offset + limit]
+        more = offset + len(items) < len(selected)
+        return {'scope': scope, 'items': items, 'counts': counts, 'provenance': provenance, 'sender_counts': sender_counts,
+                'total': len(selected), 'truncated': truncated or bool(pending), 'offset': offset, 'limit': limit,
+                'has_more': more, 'next_offset': offset + len(items) if more else None, 'snapshot': current, 'reset': reset}
 
 
 def kind(name):
@@ -198,8 +216,8 @@ class Handler(BaseHTTPRequestHandler):
                 if set(q) - {'folder', 'scope'}: return self.error(400, 'unknown_parameter')
                 return self.json(200, self.server.root.list(q.get('folder', ''), q.get('scope', 'personal')))
             if parsed.path == '/api/index':
-                if set(q) - {'q', 'type', 'scope', 'sender'}: return self.error(400, 'unknown_parameter')
-                return self.json(200, self.server.root.index(q.get('q', ''), q.get('type', ''), q.get('scope', 'personal'), q.get('sender', '')))
+                if set(q) - {'q', 'type', 'scope', 'sender', 'offset', 'limit', 'snapshot'}: return self.error(400, 'unknown_parameter')
+                return self.json(200, self.server.root.index(q.get('q', ''), q.get('type', ''), q.get('scope', 'personal'), q.get('sender', ''), q.get('offset', 0), q.get('limit', 120), q.get('snapshot', '')))
             if parsed.path == '/api/files/content':
                 if set(q) - {'path', 'download'}: return self.error(400, 'unknown_parameter')
                 with self.server.root.open(q.get('path', '')) as fd:
