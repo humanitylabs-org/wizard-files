@@ -31,10 +31,15 @@
       <span class="topbar-spacer" aria-hidden="true"></span>
     </header>
 
+    <div id="scope-toggle" class="apps-layout scope-toggle" role="group" aria-label="Files scope">
+      <button type="button" data-scope="personal" aria-pressed="true">Your files</button>
+      <button type="button" data-scope="app" aria-pressed="false">App data</button>
+    </div>
+    <p id="scope-hint" class="my-hint" hidden>Support files used by your apps. Browse and download only.</p>
     <div class="sticky-tools">
       <label class="search-box" for="search-input">
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-        <input id="search-input" type="search" autocomplete="off" autocapitalize="none" placeholder="Search owner files">
+        <input id="search-input" type="search" autocomplete="off" autocapitalize="none" placeholder="Search your files">
         <button id="clear-search" type="button" aria-label="Clear search">×</button>
       </label>
 
@@ -44,7 +49,7 @@
       <div class="type-grid" id="type-tiles">
         <a class="type-tile my-files-tile" href="#/my" data-type="my">
           <span class="type-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span>
-          <span><strong>My files</strong><small>Folders &amp; uploads</small></span>
+          <span><strong id="folder-label">Your folders</strong><small id="folder-detail">Folders &amp; uploads</small></span>
           <span class="apps-entry-arrow" aria-hidden="true">›</span>
         </a>
         <a class="type-tile video" href="#/videos" data-type="video">
@@ -69,7 +74,7 @@
 
 
 
-    <section id="my-files" class="my-files" aria-label="My files" hidden>
+    <section id="my-files" class="my-files" aria-label="Folders" hidden>
       <nav id="my-crumbs" class="my-crumbs" aria-label="Folder path"></nav>
       <div class="my-toolbar">
         <button id="my-upload" class="my-upload-button" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M5 20h14"/></svg><span>Upload</span></button>
@@ -80,7 +85,7 @@
       <div id="my-uploads" class="my-uploads" aria-label="Uploads" hidden></div>
       <p id="my-error" class="status-banner" role="alert" hidden></p>
       <div id="my-list" class="feed my-list" aria-live="polite" aria-busy="true"></div>
-      <div id="my-empty" class="empty-state" hidden><h3>This folder is empty</h3><p>Use Upload to add files here.</p></div>
+      <div id="my-empty" class="empty-state" hidden><h3>No files in this view</h3><p id="my-empty-copy">Use Upload to add files here.</p></div>
     </section>
 
 
