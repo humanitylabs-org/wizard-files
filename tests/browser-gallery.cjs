@@ -20,7 +20,12 @@ const out=process.env.QA_OUT || '.', live=process.env.LIVE==='1';
    let f=page;
    if(live){
     await page.waitForFunction(()=>[...document.querySelectorAll('iframe')].some(f=>new URL(f.src||'about:blank',location.href).pathname==='/wizard-files/'));
-    f=page.frames().find(f=>new URL(f.url()||'about:blank').pathname==='/wizard-files/');assert(f);
+    for(let attempt=0;attempt<100;attempt++){
+      f=page.frames().find(frame=>new URL(frame.url()||'about:blank').pathname==='/wizard-files/');
+      if(f)break;
+      await page.waitForTimeout(100);
+    }
+    assert(f,'canonical app iframe navigation completed');
    }
    await f.locator('.feed-section[aria-busy="false"]').waitFor();
    ok(await f.locator('[data-scope="personal"]').getAttribute('aria-pressed')==='true','cold personal '+phone);
