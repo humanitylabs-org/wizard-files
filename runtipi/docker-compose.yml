@@ -11,4 +11,5 @@ services:
     security_opt: ['no-new-privileges:true']
     tmpfs: ['/tmp:size=16m,noexec,nosuid,nodev']
     x-runtipi:
+      is_main: true
       internal_port: 8080
