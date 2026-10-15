@@ -2,7 +2,7 @@
 wizard: 0.2
 id: wizard-files
 name: Wizard Files
-version: 0.1.0
+version: 0.1.1
 type: service
 category: system
 summary: Browse, search and preview your Wizard owner-files storage with the shared resumable upload service.

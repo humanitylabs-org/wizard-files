@@ -1,9 +1,10 @@
 services:
   wizard-files:
-    image: ghcr.io/humanitylabs-org/wizard-files:0.1.0
+    image: ghcr.io/humanitylabs-org/wizard-files:0.1.1
     environment:
       FILES_ROOT: /files
       FILES_ALLOWED_HOSTS: ${FILES_ALLOWED_HOSTS}
+      FILES_APP_DATA_PREFIXES: ${FILES_APP_DATA_PREFIXES:-[]}
     volumes:
       - ${ROOT_FOLDER_HOST}/media:/files:ro
     read_only: true

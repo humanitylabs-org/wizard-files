@@ -1,6 +1,6 @@
 /* Files · My files: a folder view of the owner's user-files root with Upload.
  *
- * Listing and reading: GET /wizard/v1/user-files?folder=… and …/user-files/content?path=… (Agent Service).
+ * Listing and reading: scoped /api/files and unchanged same-root /api/files/content.
  * Upload: the same resumable path as chat attachments and the share sheet (/wizard/v1/uploads), with
  * destination {folder}: the folder being browsed, or Inbox/<today> from the top level. Chunks are cut
  * with Blob.slice (nothing is held whole in memory), PATCHed with Upload-Offset, and resumed from the
@@ -13,6 +13,7 @@
 (() => {
   'use strict';
   const API = new URL('api/files', location.href).pathname;
+  const scope = window.WizFilesScope;
   const UPLOADS = '/wizard/v1/uploads';
   const STORE = 'wizard-files:uploads:v1';
   const MIB = 1048576;
@@ -32,11 +33,12 @@
 
   // ---- routes ---------------------------------------------------------------------------------------
   const enc = folder => folder.split('/').filter(Boolean).map(encodeURIComponent).join('/');
-  const hashFor = (folder, file = '') => `#/my${folder ? `/${enc(folder)}` : ''}${file ? `?f=${encodeURIComponent(file)}` : ''}`;
+  const hashFor = (folder, file = '') => scope.hash(`#/my${folder ? `/${enc(folder)}` : ''}${file ? `?f=${encodeURIComponent(file)}` : ''}`);
   function route() {
     const raw = (location.hash || '').slice(1);
     const [path, query = ''] = raw.split('?');
     const parts = path.split('/').filter(Boolean);
+    if (parts[0] === 'app') parts.shift();
     if (parts[0] !== 'my') return null;
     let folder = '';
     try { folder = parts.slice(1).map(decodeURIComponent).join('/'); } catch (_) { folder = ''; }
@@ -62,7 +64,7 @@
     if (!r) return null;
     if (r.file) return hashFor(r.folder);
     if (r.folder) return hashFor(parentOf(r.folder));
-    return '#/';
+    return scope.hash('#/');
   }
 
   // ---- formatting -----------------------------------------------------------------------------------
@@ -91,20 +93,20 @@
   const node = (tag, className, text) => { const n = document.createElement(tag); if (className) n.className = className; if (text != null) n.textContent = text; return n; };
 
   // ---- listing --------------------------------------------------------------------------------------
-  const view = { folder: null, showing: null, entries: [], generation: 0, available: null };
+  const view = { folder: null, showing: null, entries: [], generation: 0, available: null, uploadAllowed: false };
   async function load(folder) {
     const generation = ++view.generation;
     els.error.hidden = true;
     els.list.setAttribute('aria-busy', 'true');
     try {
-      const response = await fetch(`${API}?folder=${encodeURIComponent(folder)}`, { cache: 'no-store', credentials: 'same-origin' });
+      const response = await fetch(`${API}?folder=${encodeURIComponent(folder)}&scope=${scope.scope()}`, { cache: 'no-store', credentials: 'same-origin' });
       if (generation !== view.generation) return;
       if (response.status === 404) { showError('That folder isn’t there any more.', true); return; }
       if (response.status === 503) { showError('My files isn’t set up on this Wizard yet.'); view.available = false; renderUploadButton(); return; }
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
       if (generation !== view.generation) return;
-      view.available = true; renderUploadButton();
+      view.available = true; view.uploadAllowed = data.upload_allowed === true; renderUploadButton();
       view.folder = folder; view.entries = Array.isArray(data.entries) ? data.entries : [];
       renderList();
       if (data.truncated) showError('This folder is large; showing the first 5,000 entries.');
@@ -121,7 +123,7 @@
   }
   function renderCrumbs(folder) {
     const parts = folder ? folder.split('/') : [];
-    const items = [['My files', '']].concat(parts.map((name, i) => [name, parts.slice(0, i + 1).join('/')]));
+    const items = [[scope.label(), '']].concat(parts.map((name, i) => [name, parts.slice(0, i + 1).join('/')]));
     els.crumbs.replaceChildren(...items.flatMap(([name, path], i) => {
       const last = i === items.length - 1;
       const link = node(last ? 'span' : 'a', 'crumb', name);
@@ -161,7 +163,7 @@
     else if (k === 'audio') { const a = node('audio'); a.src = contentUrl(path); a.controls = true; a.preload = 'metadata'; els.sheetPreview.append(a); }
     else els.sheetPreview.append(node('div', 'doc-preview', (ext(name) || 'file').slice(0, 4)));
     els.sheetTitle.textContent = name;
-    els.sheetMeta.textContent = [folder ? `My files › ${folder.split('/').join(' › ')}` : 'My files', entry ? size(entry.size) : ''].filter(Boolean).join(' · ');
+    els.sheetMeta.textContent = [folder ? `${scope.label()} › ${folder.split('/').join(' › ')}` : scope.label(), entry ? size(entry.size) : ''].filter(Boolean).join(' · ');
     const open = node('a', 'primary', 'Open'); open.href = contentUrl(path); open.target = '_blank'; open.rel = 'noopener noreferrer';
     const download = node('a', '', 'Download'); download.href = contentUrl(path, true);
     els.sheetActions.replaceChildren(open, download);
@@ -297,6 +299,15 @@
     let fails = 0;
     const wait = async () => { fails += 1; await sleep(backoff(fails), signal); };
     try {
+      // Re-check saved jobs too: policy may have changed since the file was picked.
+      // This protects UI destinations, not the independent transfer service's authority.
+      const policyResponse = await fetch(`${API}?folder=${encodeURIComponent(job.folder)}&scope=personal`, {cache:'no-store', signal});
+      if (!policyResponse.ok) throw Object.assign(new Error('Could not check the upload destination. Retry when connected.'), {user:true});
+      const policy = await policyResponse.json();
+      const path = job.folder ? `${job.folder}/${job.name}` : `Inbox/${job.name}`;
+      const blocked = !policy.upload_allowed || !Array.isArray(policy.app_data_prefixes) || policy.app_data_prefixes.some(p =>
+        path === p || path.startsWith(p + '/') || (!job.folder && (p === 'Inbox' || p.startsWith('Inbox/'))));
+      if (blocked) throw Object.assign(new Error('App data is read-only here. Choose a folder in Your files.'), {user:true});
       set('uploading', job.sent);
       // 1) create, or find the existing upload again (same client_upload_id → same upload and its offset)
       let up;
@@ -365,7 +376,7 @@
   const rowNodes = new Map();
   function renderJobs() {
     const visible = [...jobs.values()].filter(j => j.state !== 'cancelled').sort((a, b) => a.created - b.created);
-    els.uploads.hidden = !visible.length;
+    els.uploads.hidden = scope.scope() === 'app' || !visible.length;
     for (const [key, n] of rowNodes) if (!jobs.has(key) || jobs.get(key).state === 'cancelled') { n.remove(); rowNodes.delete(key); }
     for (const job of visible) renderJob(job);
     syncHold();
@@ -419,18 +430,22 @@
     }
     job.file = file; job.state = 'waiting'; renderJob(job); pump();
   });
-  els.upload.addEventListener('click', () => { els.picker.value = ''; els.picker.click(); });
+  els.upload.addEventListener('click', () => { if (scope.scope() !== 'personal' || !view.uploadAllowed) return; els.picker.value = ''; els.picker.click(); });
   els.picker.addEventListener('change', () => {
     const r = route(); const folder = r ? r.folder : '';
+    if (!r || scope.scope() !== 'personal' || !view.uploadAllowed) { els.picker.value = ''; return; }
     const files = [...(els.picker.files || [])];
     for (const file of files) if (file.size > 0) addJob(file, folder); else toast('Empty files can’t be uploaded');
     els.picker.value = '';
   });
   function renderUploadButton() {
-    els.upload.disabled = view.available === false;
+    const readOnly = scope.scope() === 'app' || !view.uploadAllowed;
+    els.upload.hidden = scope.scope() === 'app';
+    els.upload.disabled = view.available !== true || readOnly;
     const r = route();
-    els.hint.textContent = r && !r.folder ? 'Uploads here go to Inbox, in a folder for today.' : '';
+    els.hint.textContent = readOnly ? 'This view is read-only.' : r && !r.folder ? 'Uploads here go to Inbox, in a folder for today.' : '';
     els.hint.hidden = !els.hint.textContent;
+    $('#my-empty-copy').textContent = readOnly ? 'No matching app data or personal files in this folder.' : 'Use Upload to add files here.';
   }
 
   // ---- route handling -------------------------------------------------------------------------------
@@ -439,10 +454,11 @@
     document.body.classList.toggle('my-files-open', Boolean(r));
     els.section.hidden = !r;
     if (!r) { hideSheet(); view.showing = null; view.generation++; return; }
-    els.title.textContent = r.folder ? r.folder.split('/').pop() : 'My files';
+    els.title.textContent = r.folder ? r.folder.split('/').pop() : scope.label();
     els.back.classList.add('visible');
-    renderCrumbs(r.folder); renderUploadButton();
-    if (view.showing !== r.folder) { view.showing = r.folder; view.entries = []; els.list.replaceChildren(); els.empty.hidden = true; load(r.folder); }
+    const showing = scope.scope() + ':' + r.folder;
+    if (view.showing !== showing) { view.showing = showing; view.uploadAllowed = false; view.entries = []; els.list.replaceChildren(); els.empty.hidden = true; load(r.folder); }
+    renderCrumbs(r.folder); renderUploadButton(); renderJobs();
     if (r.file) openSheet(r.folder, r.file); else hideSheet();
   }
   addEventListener('hashchange', apply);
@@ -459,7 +475,7 @@
   // Links into My files (the home tile, folders, files, breadcrumbs) navigate in-app.
   document.addEventListener('click', e => {
     if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
-    const link = e.target.closest && e.target.closest('a[href^="#/my"]');
+    const link = e.target.closest && e.target.closest('a[href^="#/my"],a[href^="#/app/my"]');
     if (!link) return;
     e.preventDefault();
     go(link.getAttribute('href'));

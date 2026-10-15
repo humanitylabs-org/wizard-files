@@ -11,11 +11,18 @@ import stat
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit, quote
 
-VERSION = '0.1.0'
+VERSION = '0.1.1'
 ASSETS = {'index.html', 'app.js', 'my-files.js', 'styles.css', 'my-files.css', 'restyle.css', 'integration.css', 'icon.png'}
 
 class Root:
-    def __init__(self, path):
+    def __init__(self, path, app_data_prefixes=()):
+        # Visibility policy, not authorization. Invalid configuration stops startup.
+        if not isinstance(app_data_prefixes, (list, tuple)) or len(app_data_prefixes) > 256:
+            raise ValueError('app-data prefixes must be a bounded array')
+        for prefix in app_data_prefixes:
+            if not self.parts(prefix):
+                raise ValueError('app-data prefix must not be the root')
+        self.app_data_prefixes = tuple(sorted(set(app_data_prefixes)))
         if os.path.abspath(path) == '/':
             raise ValueError('root must be narrower than filesystem')
         self.fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
@@ -48,7 +55,29 @@ class Root:
         finally:
             os.close(fd)
 
-    def list(self, path):
+    @staticmethod
+    def scope(scope):
+        if scope not in {'personal', 'app'}:
+            raise ValueError('invalid scope')
+        return scope
+
+    def is_app_data(self, path):
+        return any(path == p or path.startswith(p + '/') for p in self.app_data_prefixes)
+
+    def visible(self, path, is_dir, scope):
+        classified = self.is_app_data(path)
+        if scope == 'personal':
+            return not classified
+        return classified or (is_dir and (not path or any(p.startswith(path + '/') for p in self.app_data_prefixes)))
+
+    def list(self, path, scope='personal'):
+        self.scope(scope)
+        self.parts(path)
+        result = {'folder': path, 'scope': scope, 'entries': [], 'truncated': False,
+                  'upload_allowed': scope == 'personal' and not self.is_app_data(path),
+                  'app_data_prefixes': self.app_data_prefixes}
+        if not self.visible(path, True, scope):
+            return result
         rows = []
         with self.open(path, directory=True) as fd:
             for name in sorted(os.listdir(fd), key=str.casefold):
@@ -61,22 +90,28 @@ class Root:
                     continue
                 if not (stat.S_ISDIR(s.st_mode) or stat.S_ISREG(s.st_mode)):
                     continue
+                child = '/'.join(filter(None, [path, name]))
+                if not self.visible(child, stat.S_ISDIR(s.st_mode), scope):
+                    continue
                 rows.append({'name': name, 'path': '/'.join(filter(None, [path, name])), 'is_dir': stat.S_ISDIR(s.st_mode),
                              'size': s.st_size if stat.S_ISREG(s.st_mode) else 0,
                              'mtime': datetime.datetime.fromtimestamp(s.st_mtime, datetime.timezone.utc).isoformat(),
                              'type': kind(name)})
                 if len(rows) >= 5000:
-                    return {'folder': path, 'entries': rows, 'truncated': True}
+                    result.update(entries=rows, truncated=True)
+                    return result
         rows.sort(key=lambda r: (not r['is_dir'], r['name'].casefold()))
-        return {'folder': path, 'entries': rows, 'truncated': False}
+        result['entries'] = rows
+        return result
 
-    def index(self, query='', category=''):
+    def index(self, query='', category='', scope='personal'):
+        self.scope(scope)
         # Bounded on-demand walk, never a host index or private database.
         pending, rows, seen, truncated = [''], [], 0, False
         while pending and seen < 10000:
             folder = pending.pop()
             try:
-                data = self.list(folder)
+                data = self.list(folder, scope)
             except (OSError, ValueError):
                 continue
             truncated |= data['truncated']
@@ -95,7 +130,7 @@ class Root:
         counts = {k: sum(r['type'] == k for r in rows) for k in ['video', 'photo', 'document', 'link', 'audio']}
         selected = [r for r in rows if (not category or r['type'] == category) and query.casefold() in r['path'].casefold()]
         selected.sort(key=lambda r: r['mtime'], reverse=True)
-        return {'items': selected[:300], 'counts': counts, 'total': len(selected), 'truncated': truncated or bool(pending) or len(selected) > 300}
+        return {'scope': scope, 'items': selected[:300], 'counts': counts, 'total': len(selected), 'truncated': truncated or bool(pending) or len(selected) > 300}
 
 
 def kind(name):
@@ -152,11 +187,11 @@ class Handler(BaseHTTPRequestHandler):
             if parsed.path == '/health':
                 return self.json(200, {'ok': True, 'version': VERSION})
             if parsed.path == '/api/files':
-                if set(q) - {'folder'}: return self.error(400, 'unknown_parameter')
-                return self.json(200, self.server.root.list(q.get('folder', '')))
+                if set(q) - {'folder', 'scope'}: return self.error(400, 'unknown_parameter')
+                return self.json(200, self.server.root.list(q.get('folder', ''), q.get('scope', 'personal')))
             if parsed.path == '/api/index':
-                if set(q) - {'q', 'type'}: return self.error(400, 'unknown_parameter')
-                return self.json(200, self.server.root.index(q.get('q', ''), q.get('type', '')))
+                if set(q) - {'q', 'type', 'scope'}: return self.error(400, 'unknown_parameter')
+                return self.json(200, self.server.root.index(q.get('q', ''), q.get('type', ''), q.get('scope', 'personal')))
             if parsed.path == '/api/files/content':
                 if set(q) - {'path', 'download'}: return self.error(400, 'unknown_parameter')
                 with self.server.root.open(q.get('path', '')) as fd:
@@ -213,11 +248,11 @@ class Handler(BaseHTTPRequestHandler):
             if method == 'initialize':
                 result = {'protocolVersion': '2024-11-05', 'capabilities': {'tools': {}}, 'serverInfo': {'name': 'wizard-files', 'version': VERSION}}
             elif method == 'tools/list':
-                result = {'tools': [{'name': 'files_list', 'description': 'List a folder in the owner-files root; paths are relative.', 'inputSchema': {'type': 'object', 'properties': {'folder': {'type': 'string'}}, 'additionalProperties': False}}, {'name': 'files_search', 'description': 'Search owner-file names only.', 'inputSchema': {'type': 'object', 'properties': {'query': {'type': 'string'}}, 'additionalProperties': False}}]}
+                result = {'tools': [{'name': 'files_list', 'description': 'List relative folders. Defaults to personal files; app scope explicitly includes configured app data.', 'inputSchema': {'type': 'object', 'properties': {'folder': {'type': 'string'}, 'scope': {'type': 'string', 'enum': ['personal', 'app']}}, 'additionalProperties': False}}, {'name': 'files_search', 'description': 'Search names in personal files (default) or configured app data.', 'inputSchema': {'type': 'object', 'properties': {'query': {'type': 'string'}, 'scope': {'type': 'string', 'enum': ['personal', 'app']}}, 'additionalProperties': False}}]}
             elif method == 'tools/call':
                 args = params.get('arguments', {})
-                if params.get('name') == 'files_list': data = self.server.root.list(args.get('folder', ''))
-                elif params.get('name') == 'files_search': data = self.server.root.index(args.get('query', ''))
+                if params.get('name') == 'files_list': data = self.server.root.list(args.get('folder', ''), args.get('scope', 'personal'))
+                elif params.get('name') == 'files_search': data = self.server.root.index(args.get('query', ''), scope=args.get('scope', 'personal'))
                 else: raise ValueError('unknown tool')
                 result = {'content': [{'type': 'text', 'text': json.dumps(data)}]}
             else: raise ValueError('unknown method')
@@ -227,5 +262,5 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__ == '__main__':
     server = ThreadingHTTPServer(('0.0.0.0', int(os.getenv('PORT', '8080'))), Handler)
-    server.root = Root(os.getenv('FILES_ROOT', '/files'))
+    server.root = Root(os.getenv('FILES_ROOT', '/files'), json.loads(os.getenv('FILES_APP_DATA_PREFIXES', '[]')))
     server.serve_forever()

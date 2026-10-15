@@ -8,3 +8,4 @@ html[data-wz-hosted] .topbar h1 {visibility:hidden;}
 .owner-item .item-copy {min-width:0;flex:1;}
 .owner-item .item-meta {overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 :root[data-color-scheme="light"] {color-scheme:light;}
+.scope-toggle {margin-bottom:12px;}

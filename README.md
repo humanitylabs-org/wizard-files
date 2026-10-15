@@ -23,11 +23,34 @@ not claim to isolate a malicious same-origin app from the system API.
 
 Install the private source through WAM. Configure FILES_ALLOWED_HOSTS to the hostnames
 of the authenticated Wizard gateway, comma separated (no schemes). Publish no raw
-container port externally. The initial staged package intentionally has no `provides`
-slot; canonical activation is a separate reviewed metadata step.
+container port externally. This managed package provides the files slot; legacy
+catalogs remain separate and are not migrated.
+
+### Personal files and app data
+
+Your files is the default view. Set `FILES_APP_DATA_PREFIXES` to a JSON array of
+explicit relative file or directory paths owned by apps (portable default: `[]`).
+For example, `["ExampleLibrary", "ExampleRecorder/manifest.json"]` separates a whole
+library and one metadata file while retaining recordings in Your files. Unknown
+files always remain visible. There are no filename, extension or AI-title guesses.
+The install owner must verify ownership before configuring a prefix.
+
+App data is opt-in and browse/download only. Both scopes apply to folder listings,
+Recent, search, categories and counts, including MCP (`scope: personal|app`). App
+scope traverses only matching paths and their ancestors; personal scope skips
+classified subtrees. Overlapping prefixes do not duplicate files. Empty, absolute,
+hidden, escaping, malformed or excessive prefixes stop startup instead of hiding
+unrelated data. Changing this policy never moves or deletes files.
+
+This is visibility separation, not new authorization: same-root content and download
+URLs retain their existing read boundary. Private agent stores are never mounted.
+Uploads still use the shared resumable endpoint; this UI checks the current policy
+before starting or resuming any job and refuses app-data destinations. The independent
+transfer service's authorization is unchanged. Root uploads use the existing Inbox
+behavior; if any Inbox prefix is classified, choose a different personal folder.
 
 Build on the designated worker: `docker build --platform linux/amd64 --build-arg
-REVISION=$(git rev-parse HEAD) -t wizard-files:0.1.0 .`. Run `python -m unittest discover
+REVISION=$(git rev-parse HEAD) -t wizard-files:0.1.1 .`. Run `python -m unittest discover
 -s tests -v`. Runtime has no third-party dependencies. The shell supplies the real
 `/wizard-os-home/core/app-client.js` (not bundled or reimplemented here).
 
