@@ -10,10 +10,11 @@ from pathlib import Path
 import re
 import stat
 from provenance import PhotoProvenance
+from thumbnails import ThumbnailCache, identity
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit, quote
 
-VERSION = '0.1.3'
+VERSION = '0.1.4'
 ASSETS = {'index.html', 'media-gallery.js', 'app.js', 'my-files.js', 'styles.css', 'my-files.css', 'restyle.css', 'integration.css', 'icon.png'}
 
 class Root:
@@ -29,6 +30,7 @@ class Root:
             raise ValueError('root must be narrower than filesystem')
         self.fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
         self.provenance = PhotoProvenance(self)
+        self.thumbnails = ThumbnailCache(os.getenv('FILES_CACHE_DIR', '/data/cache/thumbnails'))
 
     @staticmethod
     def parts(path):
@@ -190,7 +192,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header('Content-Type', mime)
         self.send_header('Content-Length', str(length))
         self.send_header('X-Content-Type-Options', 'nosniff')
-        self.send_header('Cache-Control', 'no-store')
+        if not extra or 'Cache-Control' not in extra:
+            self.send_header('Cache-Control', 'no-store')
         self.send_header('Referrer-Policy', 'same-origin')
         for k, v in (extra or {}).items(): self.send_header(k, str(v))
         self.end_headers()
@@ -218,6 +221,23 @@ class Handler(BaseHTTPRequestHandler):
             if parsed.path == '/api/index':
                 if set(q) - {'q', 'type', 'scope', 'sender', 'offset', 'limit', 'snapshot'}: return self.error(400, 'unknown_parameter')
                 return self.json(200, self.server.root.index(q.get('q', ''), q.get('type', ''), q.get('scope', 'personal'), q.get('sender', ''), q.get('offset', 0), q.get('limit', 120), q.get('snapshot', '')))
+            if parsed.path == '/api/files/thumbnail':
+                if set(q) - {'path', 'v'}: return self.error(400, 'unknown_parameter')
+                name = q.get('path', '')
+                if kind(name) not in {'photo', 'video'}: return self.error(415, 'preview_unavailable')
+                with self.server.root.open(name) as fd:
+                    try:
+                        body, key = self.server.root.thumbnails.get(fd, name, q.get('v', ''))
+                    except BlockingIOError:
+                        return self.error(503, 'preview_busy')
+                    except ValueError:
+                        return self.error(415, 'preview_unavailable')
+                extra = {'Cache-Control': 'private, max-age=300, must-revalidate', 'ETag': '"' + key + '"', 'Vary': 'Cookie, Authorization'}
+                if self.headers.get('If-None-Match') == extra['ETag']:
+                    return self.respond(304, 'image/jpeg', 0, extra)
+                self.respond(200, 'image/jpeg', len(body), extra)
+                if self.command != 'HEAD': self.wfile.write(body)
+                return
             if parsed.path == '/api/files/content':
                 if set(q) - {'path', 'download'}: return self.error(400, 'unknown_parameter')
                 with self.server.root.open(q.get('path', '')) as fd:
@@ -240,6 +260,11 @@ class Handler(BaseHTTPRequestHandler):
         disposition = 'attachment' if download or not safe else 'inline'
         extra = {'Content-Disposition': f"{disposition}; filename*=UTF-8''{quote(Path(name).name)}", 'Accept-Ranges': 'bytes',
                  'Content-Security-Policy': "sandbox; default-src 'none'; frame-ancestors 'self'"}
+        # Always re-authorize at the gateway and re-stat the confined descriptor;
+        # private clients can reuse unchanged bytes without mutable-path freshness leaks.
+        extra.update({'Cache-Control': 'private, no-cache', 'ETag': '"' + hashlib.sha256((name + ':' + identity(os.fstat(fd))).encode()).hexdigest() + '"', 'Vary': 'Cookie, Authorization'})
+        if self.headers.get('If-None-Match') == extra['ETag'] and not self.headers.get('Range'):
+            return self.respond(304, mime, 0, extra)
         start, end, status_code = 0, size-1, 200
         value = self.headers.get('Range')
         if value:

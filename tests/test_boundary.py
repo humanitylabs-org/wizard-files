@@ -80,6 +80,23 @@ class Boundary(unittest.TestCase):
     def test_root_symlink_rejected(self):
         link = self.base/'root-link'; link.symlink_to(self.base/'root', target_is_directory=True)
         with self.assertRaises(OSError): Root(str(link))
+    def test_private_content_validation(self):
+        path='/api/files/content?path=Folder/hello.txt'
+        with self.request(path) as r:
+            tag=r.headers['ETag']
+            self.assertEqual(r.headers['Cache-Control'],'private, no-cache')
+            self.assertIn('Cookie',r.headers['Vary'])
+        with self.request(path,headers={'If-None-Match':tag}) as r:
+            self.assertEqual(r.status,304)
+        (self.base/'root/Folder/hello.txt').write_text('changed source')
+        with self.request(path,headers={'If-None-Match':tag}) as r:
+            self.assertEqual(r.status,200)
+            self.assertNotEqual(r.headers['ETag'],tag)
+            self.assertEqual(r.read(),b'changed source')
+        for name in ['../outside/secret.txt','.secret','escape/secret.txt','file-link']:
+            with self.request('/api/files/thumbnail?path='+urllib.parse.quote(name,safe='')+'&v=x') as r:
+                self.assertIn(r.status,[400,404,415])
+
     def test_mcp(self):
         data=json.dumps({'jsonrpc':'2.0','id':1,'method':'tools/call','params':{'name':'files_list','arguments':{'folder':'Folder'}}}).encode()
         r=json.load(self.request('/mcp',data=data))

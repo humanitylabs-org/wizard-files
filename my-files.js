@@ -97,6 +97,8 @@
   async function load(folder) {
     const generation = ++view.generation;
     els.error.hidden = true;
+    els.empty.hidden = true;
+    els.list.replaceChildren(node('div', 'feed-loading', 'Loading folder…'));
     els.list.setAttribute('aria-busy', 'true');
     try {
       const response = await fetch(`${API}?folder=${encodeURIComponent(folder)}&scope=${scope.scope()}`, { cache: 'no-store', credentials: 'same-origin' });
@@ -142,7 +144,7 @@
       row.dataset.name = entry.name;
       const icon = node('span', 'my-icon');
       if (entry.is_dir) icon.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>';
-      else if (kind(entry.name) === 'image' && entry.size < 8 * MIB) { const img = node('img'); img.loading = 'lazy'; img.alt = ''; img.src = contentUrl(path); img.onerror = () => { img.remove(); icon.textContent = ext(entry.name).slice(0, 4) || 'FILE'; }; icon.append(img); }
+      else if (kind(entry.name) === 'image') { WizMediaGallery.thumbnail(icon,{...entry,path,type:'photo'}); }
       else if(kind(entry.name)==='video'){
         row.classList.add('video-card'); WizMediaGallery.thumbnail(icon,{...entry,path});
         row.addEventListener('click',e=>{if(e.button!==0||e.metaKey||e.ctrlKey||e.shiftKey||e.altKey)return;e.preventDefault();openVideo({...entry,path},row);});
