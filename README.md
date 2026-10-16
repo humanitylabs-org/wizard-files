@@ -5,7 +5,8 @@ and the existing Wizard resumable transfer client. No legacy content is copied.
 
 ## Boundary
 
-The container has one read-only bind: `${ROOT_FOLDER_HOST}/media:/files:ro`.
+The container has one owner-files read-only bind: `${ROOT_FOLDER_HOST}/media:/files:ro`,
+plus app-owned derived cache storage `${APP_DATA_DIR}/data:/data`.
 It runs as UID 1000 with no capabilities, a read-only image, no app database, no host
 service credentials, no Docker socket and no legacy or agent-home mounts. Every read
 uses an anchored root descriptor and `openat` (`dir_fd`) with `O_NOFOLLOW` on every
@@ -21,10 +22,17 @@ not claim to isolate a malicious same-origin app from the system API.
 
 ## Media gallery and photo sender contract
 
-Video cards lazily decode one near-start frame at a time in the browser (12-second
-ceiling, metadata preload and byte-range seek), never bulk-process media on the server.
-Frames keep their source aspect ratio and are cached only on the device (96 entries,
-640px maximum dimension) keyed by path plus server file identity. Tapping thumbnail
+Photo/video cards lazily request small versioned thumbnails, never original media
+bytes. One viewport-owned request runs at a time and cancels when its card leaves.
+The installed app generates 480px JPEG previews on demand in isolated decoders
+(two workers, 7-second wall/5-second CPU/768 MiB address-space ceilings, Pillow's
+40-million-pixel safety limit). Over-budget/unsupported sources remain fully readable
+through the original route and show a tappable fallback. No batch job or cron is used.
+Derived cache storage is bounded to 64 MiB/1,024 files under app data, keyed by
+path and exact device/inode/size/mtime/ctime. Every cache read first opens the original
+through the same no-follow boundary. HTTP caching is private and versioned, with ETags;
+mutable original URLs always revalidate. Browser frame memory is bounded to 96 entries;
+existing device-cached video frames are preserved. Tapping thumbnail
 or title immediately opens one muted player with native controls, fullscreen and
 close/Back to the unchanged gallery. Unsupported codecs show a terminal fallback,
 not an endless loading state. No thumbnail artifacts enter the owner's library.
@@ -55,6 +63,13 @@ loads more on demand, deduplicates paths and cancels old scope/filter/search req
 Cold verification marks deferred photos pending, not Unknown; the view retries up
 to eight bounded requests, then offers an explicit retry. Permanent size-limit or
 checksum failures stay Unknown. Pagination is held until sender ordering stabilizes.
+
+Loading, refreshing a saved view, preparing attribution, empty success, failure and
+loading more are separate UI states. Sender controls stay usable during requests;
+request generations/abort prevent stale results. Up to 12 exact scope/query/type/sender
+views (1,200 rows each, 60-second reuse age) paint from memory, then validate in the
+background. Visible views refresh every 30 seconds; changed snapshots reset pages.
+No index/provenance server cache bypasses fresh file identity/hash checks.
 
 ## Install
 
@@ -87,8 +102,9 @@ transfer service's authorization is unchanged. Root uploads use the existing Inb
 behavior; if any Inbox prefix is classified, choose a different personal folder.
 
 Build on the designated worker: `docker build --platform linux/amd64 --build-arg
-REVISION=$(git rev-parse HEAD) -t wizard-files:0.1.3 .`. Run `python -m unittest discover
--s tests -v`. Runtime has no third-party dependencies. The shell supplies the real
+REVISION=$(git rev-parse HEAD) -t wizard-files:0.1.4 .`. Run `python -m unittest discover
+-s tests -v`; set `THUMBNAIL_REAL_TESTS=1` inside the Linux image for real decoder tests.
+The image includes Pillow and FFmpeg for bounded previews. The shell supplies the real
 `/wizard-os-home/core/app-client.js` (not bundled or reimplemented here).
 
 Origin: the owner's approved Files styling and upload client. This repository is a

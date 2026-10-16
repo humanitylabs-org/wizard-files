@@ -1,6 +1,8 @@
 *
 !server.py
 !provenance.py
+!thumbnails.py
+!thumbnail_worker.py
 !media-gallery.js
 !index.html
 !app.js
