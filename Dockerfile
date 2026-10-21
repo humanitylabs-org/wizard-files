@@ -1,5 +1,6 @@
-FROM python:3.12-alpine
-RUN apk add --no-cache ffmpeg && pip install --no-cache-dir Pillow==11.3.0
+FROM python:3.12-alpine@sha256:1b668429b3511ab407d8e00648891631b0b1a4d7e15e3ca70f38ab5b91ad4ab4
+COPY requirements.lock /app/requirements.lock
+RUN apk add --no-cache ffmpeg && pip install --no-cache-dir --require-hashes --only-binary=:all: -r /app/requirements.lock
 ARG REVISION=unknown
 LABEL org.opencontainers.image.source="https://github.com/humanitylabs-org/wizard-files" org.opencontainers.image.revision=$REVISION
 WORKDIR /app

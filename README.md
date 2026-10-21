@@ -110,3 +110,22 @@ The image includes Pillow and FFmpeg for bounded previews. The shell supplies th
 Origin: the owner's approved Files styling and upload client. This repository is a
 clean code-only fork, not the donor history. No media, catalogs, private sources,
 identities or host-specific deployment configuration are distributed.
+
+## Runtime packaging
+
+`runtime.package: build` builds the pinned source locally: packaged Alpine
+ffmpeg plus Pillow 11.3.0 wheels, never a compiler or an ffmpeg source build.
+The official Python Alpine base uses a multi-architecture index digest.
+`requirements.lock` carries universal hashes, including Python 3.12 musllinux
+x86_64 and aarch64 wheels; `--require-hashes --only-binary=:all:` refuses
+unhashed artifacts and compilation. Regenerate with:
+
+```sh
+uv pip compile requirements.txt --generate-hashes --universal --python-version 3.12 --no-header -o requirements.lock
+```
+
+App Manager names the local image; compose no longer selects a published image.
+It runs as root with the existing dropped capabilities, no-new-privileges,
+read-only filesystem and tmpfs. This allows thumbnail-cache writes to a clean
+root-owned `/data` bind; owner-files remain mounted read-only.
+Requires an App Manager release containing wizard-app-manager#153.

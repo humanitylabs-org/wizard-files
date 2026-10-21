@@ -10,6 +10,7 @@ license: MIT
 source: https://github.com/humanitylabs-org/wizard-files
 icon: icon.png
 runtime:
+  package: build
   config: runtipi/config.json
   compose: runtipi/docker-compose.yml
 view:

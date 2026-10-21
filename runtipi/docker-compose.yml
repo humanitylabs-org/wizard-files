@@ -1,6 +1,10 @@
 services:
   wizard-files:
-    image: ghcr.io/humanitylabs-org/wizard-files:0.1.4
+    build:
+      context: .
+      dockerfile: Dockerfile
+    # Thumbnail cache writes need the root-owned App Manager data bind.
+    user: "0:0"
     environment:
       FILES_ROOT: /files
       FILES_ALLOWED_HOSTS: ${FILES_ALLOWED_HOSTS}
