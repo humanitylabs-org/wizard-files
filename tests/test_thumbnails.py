@@ -80,6 +80,25 @@ class ThumbnailPolicy(unittest.TestCase):
             body, key = self.cache.get(fd, 'video.mp4', identity(os.fstat(fd)))
         self.assertLessEqual(max(Image.open(io.BytesIO(body)).size), 480)
 
+    @unittest.skipUnless(sys.platform == 'linux' and os.getenv('THUMBNAIL_REAL_TESTS') == '1', 'bounded real decoders exercised in worker-built Linux image')
+    def test_real_image_alpha_orientation_and_bomb_limit(self):
+        from PIL import Image
+        Image.new('RGBA', (1600, 1200), (0, 128, 255, 64)).save(self.base/'owner/alpha.png')
+        rotated = Image.new('RGB', (1200, 600), 'green')
+        exif = rotated.getexif()
+        exif[0x0112] = 6
+        rotated.save(self.base/'owner/rotated.jpg', exif=exif)
+        Image.new('L', (8000, 5001)).save(self.base/'owner/bomb.png')
+        with self.root.open('alpha.png') as fd:
+            body, _ = self.cache.get(fd, 'alpha.png', identity(os.fstat(fd)))
+        preview = Image.open(io.BytesIO(body))
+        self.assertEqual((preview.format, preview.mode, preview.size), ('JPEG', 'RGB', (480, 360)))
+        with self.root.open('rotated.jpg') as fd:
+            body, _ = self.cache.get(fd, 'rotated.jpg', identity(os.fstat(fd)))
+        self.assertEqual(Image.open(io.BytesIO(body)).size, (240, 480))
+        with self.root.open('bomb.png') as fd, self.assertRaises(ValueError):
+            self.cache.get(fd, 'bomb.png', identity(os.fstat(fd)))
+
 
 if __name__ == '__main__':
     unittest.main()

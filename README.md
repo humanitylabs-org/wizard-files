@@ -114,7 +114,7 @@ identities or host-specific deployment configuration are distributed.
 ## Runtime packaging
 
 `runtime.package: build` builds the pinned source locally: packaged Alpine
-ffmpeg plus Pillow 11.3.0 wheels, never a compiler or an ffmpeg source build.
+ffmpeg plus Pillow 13.0.0 wheels, never a compiler or an ffmpeg source build.
 The official Python Alpine base uses a multi-architecture index digest.
 `requirements.lock` carries universal hashes, including Python 3.12 musllinux
 x86_64 and aarch64 wheels; `--require-hashes --only-binary=:all:` refuses
