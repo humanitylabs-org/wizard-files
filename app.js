@@ -53,7 +53,7 @@ function renderSenders(data){
   const note=$('#photo-provenance-note');note.hidden=route()!=='photos'||!data||(meta.available&&!meta.partial);
   note.textContent=meta.partial?`Preparing sender info… ${meta.pending} photos left. Counts may change.`:'Chat sender information is unavailable. Photos remain Other / unknown.';
 }
-const more=node('button','load-more','Load more');more.id='load-more';more.type='button';more.hidden=true;$('#feed').after(more);more.onclick=()=>fetchPage(state.generation,true);
+const more=node('button','load-more wz-button secondary','Load more');more.id='load-more';more.type='button';more.hidden=true;$('#feed').after(more);more.onclick=()=>fetchPage(state.generation,true);
 function cancelLoad(){state.generation++;state.controller?.abort();clearTimeout(state.retryTimer);state.busy=false;more.hidden=true;}
 $('#photo-senders').addEventListener('click',e=>{const b=e.target.closest('[data-sender]');if(b){state.sender=b.dataset.sender;load();}});
 function summary(data){

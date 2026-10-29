@@ -11,7 +11,7 @@ html[data-wz-hosted] .topbar h1 {visibility:hidden;}
 .scope-toggle {margin-bottom:12px;}
 /* Large film cards preserve decoded frame aspect ratio; no crop or fake artwork. */
 .feed .video-card {display:flex;flex-direction:column;align-items:stretch;gap:12px;min-width:0;padding:12px;}
-.feed .video-card .video-thumbnail {position:relative;display:flex;align-items:center;justify-content:center;width:100%;height:auto;min-height:160px;aspect-ratio:16/9;max-height:none;border-radius:10px;overflow:hidden;background:var(--soft);color:var(--muted);font-size:13px;}
+.feed .video-card .video-thumbnail {position:relative;display:flex;align-items:center;justify-content:center;width:100%;height:auto;min-height:160px;aspect-ratio:16/9;max-height:none;border-radius:10px;overflow:hidden;background:var(--soft);color:var(--muted);font-size:var(--wz-text-sm);}
 .feed .video-card .video-thumbnail img {display:block;width:100%;height:100%;object-fit:contain;border-radius:0;}
 .video-play {position:absolute;left:12px;bottom:12px;display:grid;place-items:center;width:40px;height:40px;border-radius:50%;background:var(--surface);color:var(--ink);border:1px solid var(--line);}
 .feed .video-card .item-title {white-space:normal;overflow-wrap:anywhere;}
@@ -27,7 +27,7 @@ html[data-wz-hosted] .topbar h1 {visibility:hidden;}
 .feed .video-card .item-copy {text-align:left;}
 .load-more {display:block;margin:16px auto;min-height:44px;padding:10px 24px;border:1px solid var(--line);border-radius:10px;background:var(--soft);color:var(--ink);font:inherit;cursor:pointer;}
 .load-more[hidden] {display:none;}
-.feed-loading {display:flex;align-items:center;justify-content:center;gap:10px;padding:20px;color:var(--muted);font-size:14px;}
+.feed-loading {display:flex;align-items:center;justify-content:center;gap:10px;padding:20px;color:var(--muted);font-size:var(--wz-text-md);}
 .feed-loading[hidden] {display:none;}
 .loading-wheel {width:20px;height:20px;border:2px solid var(--line);border-top-color:var(--ink);border-radius:50%;animation:files-spin .8s linear infinite;}
 @keyframes files-spin {to{transform:rotate(360deg);}}
