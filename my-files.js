@@ -90,7 +90,7 @@
     clearTimeout(toastTimer); els.toast.textContent = message; els.toast.classList.add('visible');
     toastTimer = setTimeout(() => els.toast.classList.remove('visible'), 2200);
   }
-  const node = (tag, className, text) => { const n = document.createElement(tag); if (className) n.className = className; if (text != null) n.textContent = text; return n; };
+  const node = (tag, className, text) => { const n = document.createElement(tag); if (className || tag === 'button') n.className = (className || '') + (tag === 'button' ? ' wz-button' + (className === 'primary' ? '' : ' secondary') : ''); if (text != null) n.textContent = text; return n; };
 
   // ---- listing --------------------------------------------------------------------------------------
   const view = { folder: null, showing: null, entries: [], generation: 0, available: null, uploadAllowed: false };

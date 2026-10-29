@@ -1,0 +1,10 @@
+{
+  "schema": 1,
+  "source": "https://github.com/humanitylabs-org/wizard-os",
+  "revision": "552311e5cca725b85c106d892297871abaff6564",
+  "files": {
+    "wizard-ui.css": "5551214c889918e90f7939b695b9434d71407221505d3dce7dacd7b07ebe445f",
+    "wizard-tokens.css": "958ee7a4d70d7dc3dff3e0172b94cff3caf41999fa1c68b1cde68b57cba4177d",
+    "wizard-sheet.js": "fbec58efa89921d2aed824b75c617c38c67e8f767e06ed8dd3b65b2e1f06178a"
+  }
+}
