@@ -51,7 +51,7 @@ a, button, select, [tabindex] { -webkit-tap-highlight-color: transparent; }
 /* ---------- Sticky search + chips ---------- */
 .sticky-tools, .apps-tools {
   margin: 0 -12px; padding: 2px 12px 10px;
-  background: var(--fx-chrome);
+  background: var(--wz-panel);
   -webkit-backdrop-filter: blur(18px) saturate(1.2); backdrop-filter: blur(18px) saturate(1.2);
 }
 .search-box {
@@ -304,10 +304,10 @@ a, button, select, [tabindex] { -webkit-tap-highlight-color: transparent; }
 .apps-grid .private-app-copy strong { font-size:var(--wz-text-md); }
 .apps-grid .app-star {
   right: 6px; top: 6px; border: 1px solid var(--fx-border); border-radius: 10px;
-  background: var(--fx-overlay); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+  background: var(--wz-panel); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
   color: var(--fx-text); box-shadow: none;
 }
-.apps-grid .app-star[aria-pressed="true"] { color: var(--fx-accent); background: var(--fx-overlay); border-color: color-mix(in srgb, var(--fx-accent) 50%, transparent); }
+.apps-grid .app-star[aria-pressed="true"] { color: var(--fx-accent); background: var(--wz-panel); border-color: color-mix(in srgb, var(--fx-accent) 50%, transparent); }
 
 /* ---------- My files ---------- */
 .my-files { padding-bottom: 20px; }
@@ -364,7 +364,7 @@ a, button, select, [tabindex] { -webkit-tap-highlight-color: transparent; }
 /* ---------- Sheets ---------- */
 .sheet-scrim { background: color-mix(in srgb, var(--fx-base) 62%, transparent); }
 .sheet {
-  background: var(--fx-overlay); color: var(--fx-text);
+  background: var(--wz-panel); color: var(--fx-text);
   -webkit-backdrop-filter: blur(28px) saturate(1.25); backdrop-filter: blur(28px) saturate(1.25);
   border: 1px solid var(--fx-border); border-bottom: 0; border-radius: 18px 18px 0 0;
   box-shadow: 0 -18px 60px color-mix(in srgb, var(--fx-base) 60%, transparent);
@@ -374,7 +374,7 @@ a, button, select, [tabindex] { -webkit-tap-highlight-color: transparent; }
 .sheet-close, :root:not([data-wz-hosted]) .sheet-close {
   width: 44px; height: 44px; right: 10px; top: 10px; display: grid; place-items: center;
   border: 1px solid var(--fx-border); border-radius: var(--fx-r);
-  background: var(--fx-overlay); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+  background: var(--wz-panel); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
   color: var(--fx-text); font-size:var(--wz-text-heading); cursor: pointer;
 }
 .sheet-preview, :root:not([data-wz-hosted]) .sheet-preview { min-height: 200px; background: color-mix(in srgb, var(--fx-text) 5%, var(--fx-base)); }

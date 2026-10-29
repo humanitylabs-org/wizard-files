@@ -16,6 +16,16 @@ class SharedStyle(unittest.TestCase):
         for name, digest in lock['files'].items():
             self.assertEqual(hashlib.sha256((WEB / name).read_bytes()).hexdigest(), digest, name)
 
+    def test_panels_use_skin_panel_role_without_a_forced_override(self):
+        import re
+        css = (WEB / 'restyle.css').read_text()
+        for selector in ('.sheet', '.sticky-tools, .apps-tools'):
+            found = re.search(re.escape(selector) + r'\s*\{([^}]+)\}', css)
+            self.assertIsNotNone(found)
+            if found:
+                self.assertIn('background: var(--wz-panel);', found.group(1))
+                self.assertNotIn('!important', found.group(1))
+
     def test_entrypoint_loads_the_shared_component_classes(self):
         entry = (WEB / 'index.html').read_text()
         self.assertIn('wizard-ui.css', entry)
