@@ -73,8 +73,10 @@ No index/provenance server cache bypasses fresh file identity/hash checks.
 
 ## Install
 
-Install the private source through WAM. Configure FILES_ALLOWED_HOSTS to the hostnames
-of the authenticated Wizard gateway, comma separated (no schemes). Publish no raw
+Install through WAM or the Store; no setting is required. The App Manager writes the
+box's own address into WIZARD_TRUSTED_HOSTS at install and update, and the listener
+answers it plus loopback. FILES_ALLOWED_HOSTS is optional: extra hostnames, comma
+separated (no schemes). Publish no raw
 container port externally. This managed package provides the files slot; legacy
 catalogs remain separate and are not migrated.
 
