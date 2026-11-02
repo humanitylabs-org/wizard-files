@@ -3,6 +3,8 @@
 const $=s=>document.querySelector(s), state={items:[],generation:0,layout:'list',scope:null,sender:'',filterContext:null,next:null,snapshot:'',busy:false,controller:null,retryTimer:null,phase:'loading'};
 const cache=new Map(), metadata=new Map(); // Memory only; exact scope/query/type/sender keys, 12 views / 60 seconds.
 const api=new URL('api/index',location.href).pathname;
+// Same origin: the app's own api/index. Browser boundary: the shell's files.index operation (files-data.js).
+const indexResponse=(params,signal)=>!window.WizFilesData?.opaque?fetch(api+'?'+new URLSearchParams(params),{cache:'no-store',signal}):window.WizFilesData.index(params,signal).then(v=>new Response(JSON.stringify(v),{status:200,headers:{'Content-Type':'application/json'}}),e=>{if(e?.name==='AbortError')throw e;return new Response('{}',{status:['not_allowed','revoked','stale_binding'].includes(e?.code)?403:503});});
 const types={videos:'video',photos:'photo',documents:'document',links:'link',audio:'audio'};
 const names={video:'Videos',photo:'Photos',document:'Documents',link:'Links',audio:'Audio'};
 const rawRoute=()=> (location.hash||'#/').split('?')[0].slice(2);
@@ -12,7 +14,7 @@ const scopedHash=hash=>scope()==='app'?'#/app'+hash.slice(1):hash;
 window.WizFilesScope=Object.freeze({scope,route,hash:scopedHash,label:()=>scope()==='app'?'App data':'Your files'});
 function go(hash,replace=false){if((location.hash||'#/')===hash)return;history[replace?'replaceState':'pushState']({wizardFilesRoute:true},'',location.pathname+location.search+hash);dispatchEvent(new HashChangeEvent('hashchange'));}
 function back(){const target=window.WizMyFiles?.backTarget();if(target!==null&&target!==undefined){window.WizMyFiles.go(target,{replace:true});return true;}if($('#search-input').value){$('#search-input').value='';load();return true;}if(route()){go(scopedHash('#/'),true);return true;}if(scope()==='app'){go('#/',true);return true;}return false;}
-WizardApp.ready({name:'wizard-files',version:'0.1.4'});
+WizardApp.ready({name:'wizard-files',version:'0.1.5'});
 WizardApp.back.register({canGoBack:()=>!!rawRoute()||!!$('#search-input').value,back});
 WizardApp.back.useHistory({isRoot:()=>!rawRoute()&&!$('#search-input').value});
 $('#back-button').addEventListener('click',e=>{e.preventDefault();back();});
@@ -85,7 +87,7 @@ async function fetchPage(n,append=false){
   if(append){more.hidden=false;more.textContent='Loading more…';}feedback();
   const timeout=setTimeout(()=>controller.abort(),15000);let preparing=false;
   try{
-    const res=await fetch(api+'?'+new URLSearchParams({...state.params,limit:120,offset:append?state.next:0,snapshot:append?state.snapshot:''}),{cache:'no-store',signal:controller.signal});
+    const res=await indexResponse({...state.params,limit:120,offset:append?state.next:0,snapshot:append?state.snapshot:''},controller.signal);
     if(n!==state.generation)return;
     if(res.status===401||res.status===403){cache.clear();metadata.clear();state.items=[];render();}
     if(!res.ok)throw Error('unavailable');const data=await res.json();if(n!==state.generation)return;

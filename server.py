@@ -1,6 +1,7 @@
 """Read-only, descriptor-relative owner-files server. Uploads belong to Wizard's transfer service."""
 import contextlib
 import datetime
+import hmac
 import errno
 import hashlib
 import json
@@ -15,7 +16,48 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit, quote
 
 VERSION = '0.1.5'
-ASSETS = {'index.html', 'media-gallery.js', 'app.js', 'my-files.js', 'styles.css', 'my-files.css', 'restyle.css', 'integration.css', 'icon.png'}
+ASSETS = {'index.html', 'media-gallery.js', 'app.js', 'my-files.js', 'files-data.js', 'styles.css', 'my-files.css', 'restyle.css', 'integration.css', 'icon.png',
+          'wizard-tokens.css', 'wizard-ui.css', 'wizard-sheet.js'}   # the vendored Wizard kit (wizard-style-lock.json)
+
+# Browser boundary (wizard-os #385/#386; default off, WIZARD_BROWSER_BOUNDARY=1 from the App Manager). The shell then
+# runs this view in an opaque sandboxed frame that has no direct API: listing, search, thumbnails, Range reads and
+# uploads go through the Agent Service's typed files.* operations. This listener is reachable from the private network
+# and other apps on the Wizard origin, so with the flag on its data routes (/api/...) answer ONLY the Agent Service
+# adapter: a box-local request with no browser or network-identity headers that carries this installation's
+# credential (X-Wizard-App-Credential, minted by the App Manager, never given to a browser). The page's own static
+# files stay public code. The agent's /mcp keeps its own (non-browser) path; browser requests to it are refused.
+BOUNDARY = os.getenv('WIZARD_BROWSER_BOUNDARY', '0') == '1'
+APP_CREDENTIAL = os.getenv('WIZARD_APP_CREDENTIAL', '').strip()
+CREDENTIAL_HEADER = 'x-wizard-app-credential'
+BROWSER_HEADERS = ('origin', 'cookie', 'referer', 'sec-fetch-site', 'sec-fetch-dest', 'sec-fetch-user')
+NETWORK_HEADERS = ('tailscale-user-login', 'tailscale-user-name', 'x-forwarded-for', 'x-forwarded-host', 'forwarded', 'x-real-ip', 'via')
+
+
+def boundary_config_error():
+    """Why the boundary cannot start, or '' (fail closed: never serve data unguarded with the flag on)."""
+    if BOUNDARY and not re.fullmatch('[0-9a-f]{64}', APP_CREDENTIAL):
+        return 'WIZARD_BROWSER_BOUNDARY=1 needs WIZARD_APP_CREDENTIAL (64 lowercase hex, from the App Manager)'
+    return ''
+
+
+def adapter_gate(method, path, headers):
+    """(status, error) when the boundary refuses this request, else None. headers: [(lower name, value)]."""
+    if not BOUNDARY:
+        return None
+    names = [k for k, _ in headers]
+    if path == '/mcp':
+        return (403, 'browser_request_refused') if any(k in BROWSER_HEADERS for k in names) else None
+    if not path.startswith('/api/'):
+        # Static page files and the container's own /health probe (version only, no owner data) stay public.
+        return None if method in ('GET', 'HEAD') and (path == '/health' or path.removeprefix('/') in ASSETS | {''}) else (405, 'method_not_allowed')
+    if any(k in BROWSER_HEADERS for k in names):
+        return 403, 'browser_request_refused'       # frames, pages and other apps' tabs, whatever they carry
+    if any(k in NETWORK_HEADERS or k.startswith('cf-') for k in names):
+        return 403, 'network_identity_refused'      # an owner login from the network is not adapter authority
+    supplied = [v for k, v in headers if k == CREDENTIAL_HEADER]
+    if len(supplied) != 1 or not hmac.compare_digest(supplied[0].strip().encode('latin-1'), APP_CREDENTIAL.encode()):
+        return 401, 'adapter_credential_required'
+    return None
 
 class Root:
     def __init__(self, path, app_data_prefixes=()):
@@ -195,6 +237,11 @@ class Handler(BaseHTTPRequestHandler):
         pass  # No owner file names in logs.
 
     def trusted(self):
+        refused = adapter_gate(self.command, urlsplit(self.path).path, [(k.lower(), v) for k, v in self.headers.items()])
+        if refused:
+            self.error(*refused); return False
+        if BOUNDARY and not urlsplit(self.path).path.startswith(('/api/', '/mcp')):
+            return True    # the opaque frame's own static page and scripts (cross-site from origin null)
         host = self.headers.get('Host', '').lower()
         allowed = allowed_hosts()
         hostname = urlsplit('http://' + host).hostname
@@ -332,6 +379,8 @@ class Handler(BaseHTTPRequestHandler):
             self.error(400, 'invalid_or_unsafe_request')
 
 if __name__ == '__main__':
+    if boundary_config_error():
+        raise SystemExit(boundary_config_error())
     server = ThreadingHTTPServer(('0.0.0.0', int(os.getenv('PORT', '8080'))), Handler)
     server.root = Root(os.getenv('FILES_ROOT', '/files'), json.loads(os.getenv('FILES_APP_DATA_PREFIXES', '[]')))
     server.serve_forever()
