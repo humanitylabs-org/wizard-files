@@ -12,7 +12,7 @@ async function decode(item,element){
   const controller=new AbortController(),job={element,cancelled:false,cancel:()=>{job.cancelled=true;controller.abort();}};active=job;
   const timer=setTimeout(()=>controller.abort(),10000);
   try{
-    const response=await fetch(urlFor(item),{signal:controller.signal,credentials:'same-origin',priority:'low'});
+    const response=window.WizFilesData?await window.WizFilesData.thumbnail(item,controller.signal,urlFor(item)):await fetch(urlFor(item),{signal:controller.signal,credentials:'same-origin',priority:'low'});
     if(!response.ok)throw Error('preview unavailable');
     const blob=await response.blob();if(blob.size>512*1024)throw Error('preview bounds');
     const url=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=reject;reader.readAsDataURL(blob);});

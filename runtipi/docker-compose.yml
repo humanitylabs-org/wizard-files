@@ -9,6 +9,9 @@ services:
       FILES_ROOT: /files
       FILES_ALLOWED_HOSTS: ${FILES_ALLOWED_HOSTS}
       FILES_APP_DATA_PREFIXES: ${FILES_APP_DATA_PREFIXES:-[]}
+      # Browser boundary (default off): written by the App Manager only when the box turns it on.
+      WIZARD_BROWSER_BOUNDARY: ${WIZARD_BROWSER_BOUNDARY:-}
+      WIZARD_APP_CREDENTIAL: ${WIZARD_APP_CREDENTIAL:-}
     volumes:
       - ${ROOT_FOLDER_HOST}/media:/files:ro
       - ${APP_DATA_DIR}/data:/data

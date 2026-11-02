@@ -7,18 +7,19 @@
  * server's offset after a network loss. Upload ids and file identity (name, size, lastModified) are kept
  * in localStorage, so after a reload the user re-picks the same file and it carries on where it stopped.
  *
+ * Browser boundary (default off): files-data.js swaps every transport for the shell's typed operations, media
+ * tickets and upload port; this file keeps one listing, preview and resumable-upload logic for both.
+ *
  * Routes: #/my, #/my/<folder>/<sub>, #/my/<folder>?f=<name> (preview). Back goes: preview → folder →
  * parent folder → My files → Files home (never out of the app).
  */
 (() => {
   'use strict';
-  const API = new URL('api/files', location.href).pathname;
+  const D = window.WizFilesData;
   const scope = window.WizFilesScope;
-  const UPLOADS = '/wizard/v1/uploads';
-  const STORE = 'wizard-files:uploads:v1';
   const MIB = 1048576;
-  const DEFAULT_CHUNK = 8 * MIB, MIN_CHUNK = 256 * 1024, MAX_CHUNK = 64 * MIB;
-  const STALL_MS = 45000;
+  // The upload port moves at most 1 MiB per chunk (ADAPTER-SKETCH §6); the same-origin service keeps its own sizes.
+  const DEFAULT_CHUNK = 8 * MIB, MIN_CHUNK = D.uploads.port ? 1 : 256 * 1024, MAX_CHUNK = D.uploads.port ? MIB : 64 * MIB;
   const NO_SPACE = 'Not enough space on your Wizard';
   const TOO_LARGE = 'File too large for this Wizard';
   const $ = selector => document.querySelector(selector);
@@ -84,7 +85,7 @@
     if (['mp3', 'm4a', 'wav', 'ogg', 'opus', 'flac'].includes(e)) return 'audio';
     return 'file';
   };
-  const contentUrl = (path, download = false) => `${API}/content?path=${encodeURIComponent(path)}${download ? '&download=1' : ''}`;
+  const contentUrl = D.contentUrl;
   let toastTimer = 0;
   function toast(message) {
     clearTimeout(toastTimer); els.toast.textContent = message; els.toast.classList.add('visible');
@@ -101,16 +102,19 @@
     els.list.replaceChildren(node('div', 'feed-loading', 'Loading folder…'));
     els.list.setAttribute('aria-busy', 'true');
     try {
-      const response = await fetch(`${API}?folder=${encodeURIComponent(folder)}&scope=${scope.scope()}`, { cache: 'no-store', credentials: 'same-origin' });
+      const response = await D.list(folder, scope.scope());
       if (generation !== view.generation) return;
       if (response.status === 404) { showError('That folder isn’t there any more.', true); return; }
       if (response.status === 503) { showError('My files isn’t set up on this Wizard yet.'); view.available = false; renderUploadButton(); return; }
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const data = await response.json();
-      if (generation !== view.generation) return;
+      if (response.status === 403) { showError(D.opaque ? 'Files needs the owner’s permission to show this folder.' : 'Open Files from your Wizard to see your files.'); return; }
+      if (response.status !== 200 || !response.data) throw new Error(`HTTP ${response.status}`);
+      const data = response.data;
       view.available = true; view.uploadAllowed = data.upload_allowed === true; renderUploadButton();
       view.folder = folder; view.entries = Array.isArray(data.entries) ? data.entries : [];
       renderList();
+      // Boundary: a preview opened before its folder's listing arrived gets the file's resource id now.
+      const r = route();
+      if (D.opaque && r && r.file && r.folder === folder && !els.sheet.hidden && !sheetItem?.resource) openSheet(r.folder, r.file);
       if (data.truncated) showError('This folder is large; showing the first 5,000 entries.');
     } catch (_) {
       if (generation === view.generation) showError('Couldn’t load this folder. Tap to retry.');
@@ -159,31 +163,43 @@
   // ---- preview sheet --------------------------------------------------------------------------------
   let overlay = null, directVideo = false, returnFocus = null;
   function stopMedia() {
-    for (const media of els.sheetPreview.querySelectorAll('video,audio')) { media.pause(); media.removeAttribute('src'); media.load(); }
+    for (const media of els.sheetPreview.querySelectorAll('video,audio,img')) { media.dispatchEvent(new Event('wizard-files:release')); if (media.pause) { media.pause(); media.removeAttribute('src'); media.load(); } }
   }
+  let sheetItem = null;   // the file opened from search/recent (its resource id) when the folder isn't listed yet
   function openVideo(item, trigger) {
-    directVideo = true; returnFocus = trigger;
+    directVideo = true; returnFocus = trigger; sheetItem = item;
     const parts = item.path.split('/'); const name = parts.pop();
     openSheet(parts.join('/'), name, true);
   }
   function openSheet(folder, name, play = false) {
     stopMedia();
     const path = folder ? `${folder}/${name}` : name;
-    const entry = view.entries.find(e => e.name === name && !e.is_dir);
+    const entry = view.entries.find(e => e.name === name && !e.is_dir) || (sheetItem?.path === path ? sheetItem : null);
+    const item = { ...(entry || {}), path };
+    sheetItem = item;
     els.sheetPreview.replaceChildren();
     const k = kind(name);
-    if (k === 'image') { const img = node('img'); img.src = contentUrl(path); img.alt = name; els.sheetPreview.append(img); }
+    if (k === 'image') { const img = node('img'); img.alt = name; D.attach(img, item, 'read'); els.sheetPreview.append(img); }
     else if (k === 'video') {
       WizMediaGallery.suspend(true);
-      const v = node('video'); v.src = contentUrl(path); v.controls = true; v.preload = 'metadata'; v.playsInline = true; v.muted = true; els.sheetPreview.append(v);
-      if (play) v.play().catch(() => { /* native controls remain available */ });
+      const v = node('video'); v.controls = true; v.preload = 'metadata'; v.playsInline = true; v.muted = true; els.sheetPreview.append(v);
+      D.attach(v, item, 'play');
+      if (play) { const go = () => v.play().catch(() => { /* native controls remain available */ }); if (v.getAttribute('src')) go(); else v.addEventListener('loadedmetadata', go, { once: true }); }
     }
-    else if (k === 'audio') { const a = node('audio'); a.src = contentUrl(path); a.controls = true; a.preload = 'metadata'; els.sheetPreview.append(a); }
+    else if (k === 'audio') { const a = node('audio'); a.controls = true; a.preload = 'metadata'; D.attach(a, item, 'play'); els.sheetPreview.append(a); }
     else els.sheetPreview.append(node('div', 'doc-preview', (ext(name) || 'file').slice(0, 4)));
     els.sheetTitle.textContent = name;
     els.sheetMeta.textContent = [folder ? `${scope.label()} › ${folder.split('/').join(' › ')}` : scope.label(), entry ? size(entry.size) : ''].filter(Boolean).join(' · ');
-    const open = node('a', 'primary', 'Open'); open.href = contentUrl(path); open.target = '_blank'; open.rel = 'noopener noreferrer';
-    const download = node('a', '', 'Download'); download.href = contentUrl(path, true);
+    let open, download;
+    if (D.opaque) {
+      // The shell opens or saves the file for the owner; this frame never holds a navigable file URL.
+      const shellAction = (label, cls, action) => { const b = node('button', cls, label); b.type = 'button'; b.disabled = !item.resource;
+        b.onclick = () => D.transfer(item, action).catch(e => toast(e?.code === 'denied' ? 'Tap again to ' + label.toLowerCase() : `Couldn’t ${label.toLowerCase()} this file`)); return b; };
+      open = shellAction('Open', 'primary', 'open'); download = shellAction('Download', '', 'save');
+    } else {
+      open = node('a', 'primary', 'Open'); open.href = contentUrl(path); open.target = '_blank'; open.rel = 'noopener noreferrer';
+      download = node('a', '', 'Download'); download.href = contentUrl(path, true);
+    }
     els.sheetActions.replaceChildren(open, download);
     if(k==='video'){
       const full=node('button','primary','Fullscreen');full.type='button';
@@ -198,7 +214,7 @@
     els.sheet.hidden = true; document.body.style.overflow = '';
     stopMedia(); els.sheetPreview.replaceChildren();
     WizMediaGallery.suspend(false);
-    directVideo=false;returnFocus?.focus({preventScroll:true});returnFocus=null;
+    directVideo=false;sheetItem=null;returnFocus?.focus({preventScroll:true});returnFocus=null;
     if (overlay) { const o = overlay; overlay = null; try { o.release(); } catch (_) {} }
   }
   function closeSheet() { if(directVideo){hideSheet();return;} const r = route(); if (r && r.file) go(hashFor(r.folder), { replace: true }); else hideSheet(); }
@@ -208,13 +224,12 @@
 
   // ---- uploads: persisted queue ---------------------------------------------------------------------
   const jobs = new Map(); // key → job (live state; File handles only in memory)
-  const saved = () => { try { const v = JSON.parse(localStorage.getItem(STORE) || '[]'); return Array.isArray(v) ? v : []; } catch (_) { return []; } };
   function persist() {
     const rows = [...jobs.values()].filter(j => !['done', 'cancelled'].includes(j.state) && j.state !== 'failed').map(j => ({
       key: j.key, client_upload_id: j.clientId, upload_id: j.uploadId || '', name: j.name, size: j.size, lastModified: j.lastModified,
       type: j.type, folder: j.folder, created: j.created,
     }));
-    try { localStorage.setItem(STORE, JSON.stringify(rows)); } catch (_) { /* storage off: resume needs the page to stay open */ }
+    D.queue.save(rows);
   }
   const newId = () => 'files-' + (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 12));
   let hold = null;
@@ -231,8 +246,8 @@
     jobs.set(job.key, job);
     persist(); renderJobs(); pump();
   }
-  function restore() {
-    for (const row of saved()) {
+  async function restore() {
+    for (const row of await D.queue.load()) {
       if (!row || !row.key || jobs.has(row.key)) continue;
       jobs.set(row.key, { key: row.key, clientId: row.client_upload_id, uploadId: row.upload_id, file: null, name: row.name, size: row.size,
         lastModified: row.lastModified, type: row.type, folder: row.folder || '', created: row.created || Date.now(), state: 'needs-file', sent: 0, message: '', controller: null, result: null });
@@ -242,9 +257,8 @@
   }
   async function refreshNeedsFile(job) {
     try {
-      const r = await fetch(`${UPLOADS}/${encodeURIComponent(job.uploadId)}`, { cache: 'no-store', credentials: 'same-origin' });
-      if (r.status === 404) { fail(job, 'The upload expired on your Wizard · upload the file again.'); return; }
-      const j = await r.json().catch(() => ({}));
+      const { status: code, j } = await D.uploads.status(job.uploadId);
+      if (code === 404 || code === 410) { fail(job, 'The upload expired on your Wizard · upload the file again.'); return; }
       if (j.status === 'complete') { job.state = 'done'; job.result = j.file || null; job.sent = job.size; persist(); renderJobs(); refreshIfShowing(j.file); return; }
       if (j.status === 'failed') { fail(job, 'The upload stopped on your Wizard · upload the file again.'); return; }
       if (Number.isFinite(Number(j.offset))) { job.sent = Number(j.offset); job.known = true; }
@@ -281,6 +295,8 @@
     const code = String(body.error || '');
     if (status === 507 || code === 'insufficient_storage') return NO_SPACE;
     if (status === 413 || code === 'file_too_large') return TOO_LARGE;
+    // Upload port (browser boundary): the owner's grant for uploads changed while this was running.
+    if (code === 'not_allowed' || code === 'revoked' || code === 'stale_binding') return 'Files can’t upload right now: permission changed. Reopen Files to try again.';
     if (code === 'folder_not_found' || status === 404) return 'That folder isn’t there any more.';
     if (code === 'folder_not_writable' || status === 403) return 'That folder can’t be written to.';
     if (code === 'destination_unavailable') return 'Uploads to My files aren’t set up on this Wizard.';
@@ -289,33 +305,8 @@
     if (code === 'client_upload_id_conflict') return 'That file doesn’t match the one being uploaded.';
     return `Upload failed (${status}).`;
   }
-  async function call(method, url, body, signal) {
-    try {
-      const r = await fetch(url, { method, cache: 'no-store', credentials: 'same-origin', signal,
-        headers: body ? { 'Content-Type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined });
-      return { status: r.status, j: await r.json().catch(() => ({})) };
-    } catch (e) { if (signal.aborted) throw e; return { status: 0, j: {} }; }
-  }
-  function patch(url, blob, offset, onBytes, signal) {
-    return new Promise((resolve, reject) => {
-      if (signal.aborted) return reject(new DOMException('cancelled', 'AbortError'));
-      const x = new XMLHttpRequest();
-      let stall = 0, done = false;
-      const finish = v => { if (done) return; done = true; clearTimeout(stall); signal.removeEventListener('abort', stop); resolve(v); };
-      const arm = () => { clearTimeout(stall); stall = setTimeout(() => { try { x.abort(); } catch (_) {} finish({ status: 0, j: {} }); }, STALL_MS); };
-      const stop = () => { done = true; clearTimeout(stall); try { x.abort(); } catch (_) {} reject(new DOMException('cancelled', 'AbortError')); };
-      x.open('PATCH', url);
-      x.setRequestHeader('Content-Type', 'application/offset+octet-stream');
-      x.setRequestHeader('Upload-Offset', String(offset));
-      x.upload.onprogress = e => { arm(); onBytes(e.loaded); };
-      x.onload = () => { let j = {}; try { j = JSON.parse(x.responseText || '{}'); } catch (_) {} const h = x.getResponseHeader('Upload-Offset'); finish({ status: x.status, offset: h == null || h === '' ? NaN : Number(h), j }); };
-      x.onerror = x.ontimeout = () => finish({ status: 0, j: {} });
-      x.onabort = () => { if (!done) finish({ status: 0, j: {} }); };
-      signal.addEventListener('abort', stop, { once: true });
-      arm();
-      x.send(blob);
-    });
-  }
+  // Transport: D.uploads (same-origin /wizard/v1/uploads, or the shell's upload port under the browser boundary).
+  const U = D.uploads;
   async function run(job) {
     const controller = new AbortController();
     const signal = controller.signal;
@@ -326,9 +317,9 @@
     try {
       // Re-check saved jobs too: policy may have changed since the file was picked.
       // This protects UI destinations, not the independent transfer service's authority.
-      const policyResponse = await fetch(`${API}?folder=${encodeURIComponent(job.folder)}&scope=personal`, {cache:'no-store', signal});
-      if (!policyResponse.ok) throw Object.assign(new Error('Could not check the upload destination. Retry when connected.'), {user:true});
-      const policy = await policyResponse.json();
+      const policyResponse = await D.list(job.folder, 'personal', signal);
+      if (policyResponse.status !== 200 || !policyResponse.data) throw Object.assign(new Error('Could not check the upload destination. Retry when connected.'), {user:true});
+      const policy = policyResponse.data;
       const path = job.folder ? `${job.folder}/${job.name}` : `Inbox/${job.name}`;
       const blocked = !policy.upload_allowed || !Array.isArray(policy.app_data_prefixes) || policy.app_data_prefixes.some(p =>
         path === p || path.startsWith(p + '/') || (!job.folder && (p === 'Inbox' || p.startsWith('Inbox/'))));
@@ -337,26 +328,26 @@
       // 1) create, or find the existing upload again (same client_upload_id → same upload and its offset)
       let up;
       for (;;) {
-        const r = await call('POST', UPLOADS, { client_upload_id: job.clientId, filename: job.name, mime: job.type, bytes: job.size, destination: { folder: job.folder } }, signal);
+        const r = await U.create({ client_upload_id: job.clientId, filename: job.name, mime: job.type, bytes: job.size, destination: { folder: job.folder } }, signal);
         if (r.status >= 200 && r.status < 300 && r.j.upload_id) { up = r.j; break; }
         if (!transient(r.status)) { fail(job, words(r.status, r.j)); return; }
         set('reconnecting'); await wait();
       }
       job.uploadId = up.upload_id; persist();
-      const url = `${UPLOADS}/${encodeURIComponent(up.upload_id)}`;
+      const id = up.upload_id;
       const chunk = Math.max(MIN_CHUNK, Math.min(MAX_CHUNK, Number(up.chunk_bytes) || DEFAULT_CHUNK));
       let offset = Number(up.offset) || 0, status = up.status, receipt = up.file || null, conflicts = 0;
       set('uploading', offset);
       const reconcile = async () => {
-        const r = await call('GET', url, null, signal);
+        const r = await U.status(id, signal);
         if (r.status === 200 && Number.isFinite(Number(r.j.offset))) { offset = Number(r.j.offset); status = r.j.status; if (r.j.file) receipt = r.j.file; return true; }
-        if (r.status === 404) throw Object.assign(new Error('The upload expired on your Wizard · upload the file again.'), { user: true });
+        if (r.status === 404 || r.status === 410) throw Object.assign(new Error('The upload expired on your Wizard · upload the file again.'), { user: true });
         return false;
       };
       for (;;) {
         while (status !== 'complete' && offset < job.size) {
           const at = offset, end = Math.min(job.size, at + chunk);
-          const r = await patch(url, job.file.slice(at, end), at, n => set('uploading', at + n), signal);
+          const r = await U.patch(id, job.file.slice(at, end), at, n => set('uploading', at + n), signal);
           if (r.status === 204 || r.status === 200) { offset = Number.isFinite(r.offset) && r.offset >= at ? r.offset : end; fails = 0; conflicts = 0; set('uploading', offset); continue; }
           if (r.status === 409 && Number.isFinite(Number(r.j.offset))) {
             if (++conflicts > 20) { fail(job, 'The upload got out of step with your Wizard · upload the file again.'); return; }
@@ -369,7 +360,7 @@
         }
         if (receipt) break;
         set('finishing', job.size);
-        const r = await call('POST', `${url}/complete`, {}, signal);
+        const r = await U.complete(id, job.file, signal);
         if (r.status === 200 && r.j.file) { receipt = r.j.file; break; }
         if (r.status === 409) { if (!(await reconcile())) await wait(); continue; }
         if (!transient(r.status)) { fail(job, words(r.status, r.j)); return; }
@@ -377,8 +368,7 @@
       }
       for (;;) {
         try {
-          const check = await fetch(`${API}/content?path=${encodeURIComponent(receipt.path)}`, {method: 'HEAD', cache: 'no-store'});
-          if (!check.ok || Number(check.headers.get('Content-Length')) !== job.size) throw new Error('Readback unavailable');
+          if (!(await U.readback(receipt, job.size))) throw new Error('Readback unavailable');
           break;
         } catch (_) { set('reconnecting', job.size); await wait(); }
       }
@@ -443,7 +433,11 @@
     if (job.state === 'failed' && job.file) button('Retry', () => { job.state = 'waiting'; job.message = ''; persist(); renderJob(job); pump(); });
     if (job.state === 'done') button('Dismiss', () => { jobs.delete(job.key); renderJobs(); });
     else if (job.state === 'failed') button('Dismiss', () => { jobs.delete(job.key); persist(); renderJobs(); });
-    else button('Cancel', () => { job.controller?.abort(); job.state = 'cancelled'; jobs.delete(job.key); persist(); renderJobs(); }, 'my-cancel');
+    else button('Cancel', () => {
+      job.controller?.abort(); job.state = 'cancelled'; jobs.delete(job.key); persist(); renderJobs();
+      // Upload port: stop it on the box too and say what really happened (staged bytes are dropped).
+      if (U.port && job.uploadId) U.abort(job.uploadId).then(s => { if (s === 'committed') { toast('That file had already finished uploading'); const r = route(); if (r) load(r.folder); } else if (s === 'aborted') toast('Upload cancelled'); });
+    }, 'my-cancel');
   }
   let repickFor = '';
   els.repick.addEventListener('change', () => {
@@ -506,6 +500,6 @@
     go(link.getAttribute('href'));
   });
   window.WizMyFiles = Object.freeze({ backTarget, route, go, openVideo });
-  restore();
   apply();
+  restore();
 })();

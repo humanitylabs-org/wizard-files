@@ -2,7 +2,7 @@
 wizard: 0.2
 id: wizard-files
 name: Wizard Files
-version: 0.1.4
+version: 0.1.5
 type: service
 category: system
 summary: Browse, search and preview your Wizard owner-files storage with the shared resumable upload service.
@@ -24,6 +24,13 @@ mcp:
   path: /mcp
   port: 8080
 skill: SKILL.md
+# Browser boundary (WIZARD_BROWSER_BOUNDARY, default off): an opaque sandboxed frame using only these typed operations
+# through the shell, each its own owner grant (wizard-os #385/#386). Nothing changes while the boundary is off.
+browser_contract:
+  version: 1
+  isolation: opaque
+  operations: [files.list, files.index, files.thumbnail, files.content, files.upload]
+  state: {schema_version: 1, persistent_bytes: 65536}
 provides: [files]
 needs: []
 ---

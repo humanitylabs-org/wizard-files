@@ -32,5 +32,16 @@ class SharedStyle(unittest.TestCase):
         scripts = '\n'.join(p.read_text() for p in WEB.glob('*.js') if not p.name.startswith('wizard-'))
         self.assertIn('wz-button', entry + scripts)
 
+    def test_every_local_asset_the_page_loads_is_served_and_shipped(self):
+        import re
+        import server
+        entry = (WEB / 'index.html').read_text()
+        local = {re.sub(r'[?#].*', '', h) for h in re.findall(r'(?:href|src)="([^"/:]+\.(?:css|js|png))', entry)}
+        docker = (WEB / 'Dockerfile').read_text()
+        self.assertTrue(local)
+        for name in sorted(local):
+            self.assertIn(name, server.ASSETS, name)
+            self.assertIn(' ' + name + ' ', docker.replace('\n', ' '), name)
+
 
 if __name__ == '__main__': unittest.main()
