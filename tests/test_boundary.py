@@ -5,10 +5,11 @@ from pathlib import Path
 import tempfile
 import threading
 import unittest
+from unittest import mock
 import urllib.error
 import urllib.parse
 import urllib.request
-from server import Root, Handler, ThreadingHTTPServer
+from server import Root, Handler, ThreadingHTTPServer, allowed_hosts
 
 class Boundary(unittest.TestCase):
     def setUp(self):
@@ -64,6 +65,21 @@ class Boundary(unittest.TestCase):
         for p in ['/server.py','/.git/config','/api/index?source=legacy','/api/files?source=/etc','/collections.json','/api/apps']:
             self.assertIn(self.request(p).status,[400,404])
         self.assertEqual(self.request('/api/uploads',data=b'{}').status,405)
+    def test_box_address_from_the_app_manager(self):
+        # Store installs have no owner form: the box address arrives as WIZARD_TRUSTED_HOSTS (host and host:port).
+        env={'WIZARD_TRUSTED_HOSTS':'Box.Tailnet.ts.net:443,box.tailnet.ts.net,box.tailnet.ts.net:18876','FILES_ALLOWED_HOSTS':''}
+        self.assertEqual(allowed_hosts(env),{'localhost','127.0.0.1','wizard-files','box.tailnet.ts.net'})
+        self.assertEqual(allowed_hosts({'WIZARD_TRUSTED_HOSTS':'https://evil/x,a@b,'}),{'localhost','127.0.0.1','wizard-files'})
+        with mock.patch.dict(os.environ,{'WIZARD_TRUSTED_HOSTS':'box.tailnet.ts.net:443','FILES_ALLOWED_HOSTS':''}):
+            self.assertEqual(self.request('/api/files',headers={'Host':'box.tailnet.ts.net'}).status,200)
+            self.assertEqual(self.request('/api/files',headers={'Host':'evil.example'}).status,421)
+    def test_recipe_needs_no_owner_setting(self):
+        here=Path(__file__).resolve().parents[1]/'runtipi'
+        fields=json.loads((here/'config.json').read_text())['form_fields']
+        self.assertEqual([f['env_variable'] for f in fields if f.get('required') and 'default' not in f],[])
+        compose=(here/'docker-compose.yml').read_text()
+        self.assertIn('WIZARD_TRUSTED_HOSTS: ${WIZARD_TRUSTED_HOSTS:-}',compose)
+        self.assertIn('FILES_ALLOWED_HOSTS: ${FILES_ALLOWED_HOSTS:-}',compose)
     def test_active_content_download(self):
         (self.base/'root'/'active.html').write_text('<script>evil()</script>')
         r=self.request('/api/files/content?path=active.html')

@@ -212,6 +212,26 @@ def kind(name):
     return 'document'
 
 
+def allowed_hosts(env=os.environ):
+    """Hostnames this listener answers. Loopback and the service name always; FILES_ALLOWED_HOSTS is optional
+    extra hostnames; WIZARD_TRUSTED_HOSTS is the box's own address, written by the App Manager at install and
+    update (entries may carry a port, e.g. `box.tailnet.ts.net:443`). A Store install has no form to fill, so
+    the box address must come from the App Manager rather than a required setting."""
+    out = {'localhost', '127.0.0.1', 'wizard-files'}
+    for var in ('FILES_ALLOWED_HOSTS', 'WIZARD_TRUSTED_HOSTS'):
+        for item in env.get(var, '').lower().split(','):
+            item = item.strip()
+            if not item or '/' in item or '@' in item:
+                continue
+            try:
+                name = urlsplit('http://' + item).hostname
+            except ValueError:
+                continue
+            if name:
+                out.add(name)
+    return out
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *args):
         pass  # No owner file names in logs.
@@ -223,7 +243,7 @@ class Handler(BaseHTTPRequestHandler):
         if BOUNDARY and not urlsplit(self.path).path.startswith(('/api/', '/mcp')):
             return True    # the opaque frame's own static page and scripts (cross-site from origin null)
         host = self.headers.get('Host', '').lower()
-        allowed = {'localhost', '127.0.0.1', 'wizard-files'} | set(filter(None, os.getenv('FILES_ALLOWED_HOSTS', '').lower().split(',')))
+        allowed = allowed_hosts()
         hostname = urlsplit('http://' + host).hostname
         if hostname not in allowed:
             self.error(421, 'untrusted_host'); return False
