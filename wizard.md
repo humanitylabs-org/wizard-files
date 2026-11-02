@@ -25,7 +25,7 @@ mcp:
   port: 8080
 skill: SKILL.md
 # Browser boundary (WIZARD_BROWSER_BOUNDARY, default off): an opaque sandboxed frame using only these typed operations
-# through the shell, each its own owner grant (wizard-os #385/#386). Nothing changes while the boundary is off.
+# through the shell, each its own owner grant (wizard-os issues 385/386). Nothing changes while the boundary is off.
 browser_contract:
   version: 1
   isolation: opaque
