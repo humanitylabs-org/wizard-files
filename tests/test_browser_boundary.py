@@ -1,4 +1,4 @@
-"""Browser boundary (WIZARD_BROWSER_BOUNDARY, wizard-os #385/#386): with the flag on, the data routes answer only the
+"""Browser boundary (WIZARD_BROWSER_BOUNDARY, wizard-os issues 385/386): with the flag on, the data routes answer only the
 Agent Service adapter (box-local, no browser or network-identity headers, this installation's credential); the
 opaque frame still loads the page's static files; browser requests to /mcp are refused. Off: unchanged."""
 import http.client

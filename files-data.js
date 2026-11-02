@@ -3,7 +3,7 @@
  * Normal Wizard (same origin): this app's own api/ (listing, search, thumbnails, Range reads) and the box's resumable
  * upload service (/wizard/v1/uploads), exactly as before.
  *
- * Browser boundary (WIZARD_BROWSER_BOUNDARY, default off; wizard-os #385/#386): the shell runs this page in an opaque
+ * Browser boundary (WIZARD_BROWSER_BOUNDARY, default off; wizard-os issues 385/386): the shell runs this page in an opaque
  * sandboxed frame (origin "null") with no direct API. Everything goes through the shell's typed, owner-granted
  * operations instead (the Agent Service checks the installation and grant on every call):
  *   files.list / files.index / files.thumbnail  (WizardApp.data.call)

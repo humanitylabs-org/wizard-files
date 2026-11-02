@@ -19,7 +19,7 @@ VERSION = '0.1.5'
 ASSETS = {'index.html', 'media-gallery.js', 'app.js', 'my-files.js', 'files-data.js', 'styles.css', 'my-files.css', 'restyle.css', 'integration.css', 'icon.png',
           'wizard-tokens.css', 'wizard-ui.css', 'wizard-sheet.js'}   # the vendored Wizard kit (wizard-style-lock.json)
 
-# Browser boundary (wizard-os #385/#386; default off, WIZARD_BROWSER_BOUNDARY=1 from the App Manager). The shell then
+# Browser boundary (wizard-os issues 385/386; default off, WIZARD_BROWSER_BOUNDARY=1 from the App Manager). The shell then
 # runs this view in an opaque sandboxed frame that has no direct API: listing, search, thumbnails, Range reads and
 # uploads go through the Agent Service's typed files.* operations. This listener is reachable from the private network
 # and other apps on the Wizard origin, so with the flag on its data routes (/api/...) answer ONLY the Agent Service
