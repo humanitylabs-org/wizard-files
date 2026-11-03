@@ -5,10 +5,11 @@ from pathlib import Path
 import tempfile
 import threading
 import unittest
+from unittest import mock
 import urllib.error
 import urllib.parse
 import urllib.request
-from server import Root, Handler, ThreadingHTTPServer
+from server import Root, Handler, ThreadingHTTPServer, allowed_hosts
 
 class Boundary(unittest.TestCase):
     def setUp(self):
@@ -64,6 +65,59 @@ class Boundary(unittest.TestCase):
         for p in ['/server.py','/.git/config','/api/index?source=legacy','/api/files?source=/etc','/collections.json','/api/apps']:
             self.assertIn(self.request(p).status,[400,404])
         self.assertEqual(self.request('/api/uploads',data=b'{}').status,405)
+    def test_box_address_from_the_app_manager(self):
+        # Store installs have no owner form: the box address arrives as WIZARD_TRUSTED_HOSTS (host and host:port).
+        env={'WIZARD_TRUSTED_HOSTS':'Box.Tailnet.ts.net:443,box.tailnet.ts.net,box.tailnet.ts.net:18876','FILES_ALLOWED_HOSTS':''}
+        self.assertEqual(allowed_hosts(env),{'localhost','127.0.0.1','wizard-files','box.tailnet.ts.net'})
+        self.assertEqual(allowed_hosts({'WIZARD_TRUSTED_HOSTS':'https://evil/x,a@b,'}),{'localhost','127.0.0.1','wizard-files'})
+        with mock.patch.dict(os.environ,{'WIZARD_TRUSTED_HOSTS':'box.tailnet.ts.net:443','FILES_ALLOWED_HOSTS':''}):
+            self.assertEqual(self.request('/api/files',headers={'Host':'box.tailnet.ts.net'}).status,200)
+            self.assertEqual(self.request('/api/files',headers={'Host':'evil.example'}).status,421)
+    def test_owner_hosts_alone_and_combined_http(self):
+        cases = [
+            ({'FILES_ALLOWED_HOSTS':'Owner.Example:443','WIZARD_TRUSTED_HOSTS':''}, ['owner.example']),
+            ({'FILES_ALLOWED_HOSTS':'owner.example','WIZARD_TRUSTED_HOSTS':'box.tailnet.ts.net:443'},
+             ['owner.example','box.tailnet.ts.net']),
+        ]
+        initialize=json.dumps({'jsonrpc':'2.0','id':1,'method':'initialize'}).encode()
+        for env, hosts in cases:
+            with self.subTest(env=env), mock.patch.dict(os.environ,env):
+                for method, path, data in [('GET','/api/files',None),('HEAD','/api/files',None),('POST','/mcp',initialize)]:
+                    for host in hosts:
+                        headers={'Host':host+':443','Origin':'https://'+host+':443','Sec-Fetch-Site':'same-origin'}
+                        with self.subTest(method=method,host=host):
+                            with self.request(path,method=method,data=data,headers=headers) as response:
+                                self.assertEqual(response.status,200)
+                            for extra, expected in [({'Host':'unknown.example'},421),
+                                                    ({'Origin':'https://other.example:443'},403),
+                                                    ({'Origin':'https://'+host+':444'},403),
+                                                    ({'Sec-Fetch-Site':'cross-site'},403)]:
+                                with self.subTest(denied=extra):
+                                    with self.request(path,method=method,data=data,headers={**headers,**extra}) as response:
+                                        self.assertEqual(response.status,expected)
+    def test_runtime_version_matches_recipe_and_manifest(self):
+        import server
+        here=Path(__file__).resolve().parents[1]
+        recipe=json.loads((here/'runtipi'/'config.json').read_text())['version']
+        manifest=next(line.split(':',1)[1].strip() for line in (here/'wizard.md').read_text().splitlines()
+                      if line.startswith('version:'))
+        self.assertEqual(recipe,'0.1.5')
+        self.assertEqual(manifest,recipe)
+        with self.request('/health') as response:
+            health=json.load(response)['version']
+        initialize=json.dumps({'jsonrpc':'2.0','id':1,'method':'initialize'}).encode()
+        with self.request('/mcp',data=initialize) as response:
+            mcp=json.load(response)['result']['serverInfo']['version']
+        for source, version in [('server.VERSION',server.VERSION),('/health',health),('MCP initialize',mcp)]:
+            with self.subTest(source=source):
+                self.assertEqual(version,recipe)
+    def test_recipe_needs_no_owner_setting(self):
+        here=Path(__file__).resolve().parents[1]/'runtipi'
+        fields=json.loads((here/'config.json').read_text())['form_fields']
+        self.assertEqual([f['env_variable'] for f in fields if f.get('required') and 'default' not in f],[])
+        compose=(here/'docker-compose.yml').read_text()
+        self.assertIn('WIZARD_TRUSTED_HOSTS: ${WIZARD_TRUSTED_HOSTS:-}',compose)
+        self.assertIn('FILES_ALLOWED_HOSTS: ${FILES_ALLOWED_HOSTS:-}',compose)
     def test_active_content_download(self):
         (self.base/'root'/'active.html').write_text('<script>evil()</script>')
         r=self.request('/api/files/content?path=active.html')
