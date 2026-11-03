@@ -5,6 +5,7 @@
 
 <script defer src="wizard-sheet.js"></script>
 <script>if (window !== window.top) document.documentElement.dataset.inFrame = "true";</script>
+  <script src="/wizard-os-home/core/browser-boundary-client.js" onerror="this.remove()"></script>
   <script src="/wizard-os-home/core/app-client.js"></script>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -22,7 +23,7 @@
   html[data-wz-hosted],html[data-wz-hosted] body {background:var(--wz-canvas);}
   </style>
   <link rel="stylesheet" href="restyle.css?v=d4492ab901ea">
-<link rel="stylesheet" href="integration.css?v=0.1.4">
+<link rel="stylesheet" href="integration.css?v=0.1.6">
 <link rel="stylesheet" href="wizard-ui.css">
 </head>
 <body>
@@ -126,8 +127,9 @@
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-  <script src="media-gallery.js?v=0.1.4" defer></script>
-  <script src="app.js?v=0.1.4" defer></script>
-  <script src="my-files.js?v=0.1.4" defer></script>
+  <script src="files-data.js?v=0.1.6" defer></script>
+  <script src="media-gallery.js?v=0.1.6" defer></script>
+  <script src="app.js?v=0.1.6" defer></script>
+  <script src="my-files.js?v=0.1.6" defer></script>
 </body>
 </html>
