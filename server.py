@@ -15,7 +15,7 @@ from thumbnails import ThumbnailCache, identity
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit, quote
 
-VERSION = '0.1.5'
+VERSION = '0.1.6'
 ASSETS = {'index.html', 'media-gallery.js', 'app.js', 'my-files.js', 'files-data.js', 'styles.css', 'my-files.css', 'restyle.css', 'integration.css', 'icon.png',
           'wizard-tokens.css', 'wizard-ui.css', 'wizard-sheet.js'}   # the vendored Wizard kit (wizard-style-lock.json)
 

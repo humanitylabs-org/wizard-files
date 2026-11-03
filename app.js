@@ -14,7 +14,7 @@ const scopedHash=hash=>scope()==='app'?'#/app'+hash.slice(1):hash;
 window.WizFilesScope=Object.freeze({scope,route,hash:scopedHash,label:()=>scope()==='app'?'App data':'Your files'});
 function go(hash,replace=false){if((location.hash||'#/')===hash)return;history[replace?'replaceState':'pushState']({wizardFilesRoute:true},'',location.pathname+location.search+hash);dispatchEvent(new HashChangeEvent('hashchange'));}
 function back(){const target=window.WizMyFiles?.backTarget();if(target!==null&&target!==undefined){window.WizMyFiles.go(target,{replace:true});return true;}if($('#search-input').value){$('#search-input').value='';load();return true;}if(route()){go(scopedHash('#/'),true);return true;}if(scope()==='app'){go('#/',true);return true;}return false;}
-WizardApp.ready({name:'wizard-files',version:'0.1.5'});
+WizardApp.ready({name:'wizard-files',version:'0.1.6'});
 WizardApp.back.register({canGoBack:()=>!!rawRoute()||!!$('#search-input').value,back});
 WizardApp.back.useHistory({isRoot:()=>!rawRoute()&&!$('#search-input').value});
 $('#back-button').addEventListener('click',e=>{e.preventDefault();back();});
