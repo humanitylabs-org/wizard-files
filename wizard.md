@@ -2,7 +2,7 @@
 wizard: 0.2
 id: wizard-files
 name: Wizard Files
-version: 0.1.5
+version: 0.1.6
 type: service
 category: system
 summary: Browse, search and preview your Wizard owner-files storage with the shared resumable upload service.
@@ -26,6 +26,9 @@ mcp:
 skill: SKILL.md
 provides: [files]
 needs: []
+switches:
+  contract: wizard.app-switches/1
+  path: /api/switches
 ---
 Wizard Files is the owner-files provider. It reads only the mounted Wizard files
 root; uploads use the box's existing `/wizard/v1/uploads` service configured for

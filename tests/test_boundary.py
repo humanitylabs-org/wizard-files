@@ -101,7 +101,7 @@ class Boundary(unittest.TestCase):
         recipe=json.loads((here/'runtipi'/'config.json').read_text())['version']
         manifest=next(line.split(':',1)[1].strip() for line in (here/'wizard.md').read_text().splitlines()
                       if line.startswith('version:'))
-        self.assertEqual(recipe,'0.1.5')
+        self.assertEqual(recipe,'0.1.6')
         self.assertEqual(manifest,recipe)
         with self.request('/health') as response:
             health=json.load(response)['version']
